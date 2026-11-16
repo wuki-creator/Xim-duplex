@@ -131,3 +131,26 @@ flowchart TD
 - [MOVA 论文](https://arxiv.org/html/2602.08794v2)：同步音视频生成架构，可借鉴时间对齐与跨模态桥接，不是现成的语音对话模型。本项目未加载其权重。
 
 详细改造、训练与验收设计见 [全双工架构说明](DUPLEX_ARCHITECTURE.md)；实测与限制见 [验证记录](VALIDATION.md)。
+
+## 5. xim-chat-v1 离线多任务后训练
+
+产品模型名称为 **xim-chat-v1**；基座仍标明 Qwen3-8B 与固定修订。当前权重在准备中，下面是离线训练与验收路径，不表示已完成或已替换线上服务。
+
+```mermaid
+flowchart LR
+    BASE[Qwen3-8B<br/>固定版本与逐片校验] --> SFT[LoRA SFT]
+    PUBLIC[64条公开中文对话] --> SFT
+    TASK[480条合成任务提案] --> SFT
+    SFT --> GRPO[GRPO<br/>同题多候选与规则奖励]
+    TASK --> GRPO
+    GRPO --> TASKTEST[100条隔离任务留出]
+    GRPO --> DIALOGUE[16条公开验证对话<br/>NLL与人工审读]
+    GRPO --> CONTRACT[真实产品提示与解析器检查<br/>聊天 / 会议 / 工作台]
+    TASKTEST --> REVIEW{比较基座与候选<br/>检查退化、截断及奖励方差}
+    DIALOGUE --> REVIEW
+    CONTRACT --> REVIEW
+    REVIEW -->|合格候选| SERVE[显式选择适配器<br/>保留基座和旧版本]
+    REVIEW -->|未通过| KEEP[保留在线基线]
+```
+
+训练任务的 JSON 提案和主聊天的情绪段落是不同接口；任务分数不能替代产品兼容性检查。GRPO 的可验证任务奖励不是人类情感偏好，也没有训练语音生成或物理世界模型。完整来源和状态见 [xim-chat-v1 模型卡](XIM_CHAT_V1_MODEL_CARD.md)。

@@ -10,6 +10,8 @@
 
 v0.9.3 已接入自托管 Smart Turn v3.2 判断句尾、有限交互状态与下一段语音预取；[世界模型路线与实际边界](docs/WORLD_MODEL_PLAN.md)说明已运行组件和待训练网络的区别。
 
+多任务模型命名为 **[xim-chat-v1](docs/XIM_CHAT_V1_MODEL_CARD.md)**，基于 Qwen3-8B 做 SFT → GRPO。当前训练候选仍在准备权重，未替换在线基线；[训练记录与运行方法](training/README.md)区分训练、验证与发布状态。
+
 **自托管产品路线。** 不调用 MOSS 或 DeepSeek 云 API。主对话、[会议空间与物理工作台](docs/WORKBENCH_AND_MEETING.md)共用 Xim 的收音链路；当前这台机器使用服务器 Whisper + 自托管语言模型 + MOSS Nano 本地语音，语音服务不可用时回退设备朗读。新增 Xim 条件残差层，尚无已训练的适配器权重；状态与限制见[模型架构](docs/XIM_MOSS_ARCHITECTURE.md)。
 
 已在当前服务器部署 Qwen2.5-1.5B-Instruct 和 MOSS Nano 语音基线，聊天与合成麦克风测试通过；小模型的复杂会议方案尚不稳定，[验证记录](docs/VALIDATION.md)保留失败结果。图像模型和语音适配器训练尚未完成；AISHELL-3 仅准备了 30 条开发样本，研究参考音色的商业使用需进一步核实授权。[自主技术路线和研发边界](docs/MODEL_STRATEGY.md)区分自有交互算法、第三方基础组件与待训练模型。

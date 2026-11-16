@@ -96,7 +96,7 @@ const server=http.createServer(async(req,res)=>{
       res.on('close',()=>{if(!res.writableEnded)controller.abort();});
       try{
         const history=Array.isArray(b.history)?b.history.slice(-10).filter(m=>m&&['user','assistant'].includes(m.role)&&typeof m.content==='string'&&m.content.length<=2000):[];
-        const result=await localChat({url:localChatUrl,model:localChatModel,text:b.text,history,interruption:b.interruption,signal:controller.signal});
+        const result=await localChat({url:localChatUrl,model:localChatModel,text:b.text,history,interruption:b.interruption,styleInstruction:styles.instruction,signal:controller.signal});
         const id=crypto.randomUUID();replies.set(id,{prompt:b.text,segments:result.segments,at:Date.now(),policy:styles.id});
         while(replies.size>100)replies.delete(replies.keys().next().value);
         return send(res,200,{id,segments:result.segments,model:localChatModel});
