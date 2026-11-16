@@ -8,12 +8,12 @@
 
 **[查看当前模型流程图与打断续接时序 →](docs/MODEL_FLOW.md)** · [原生全双工改造方案](docs/DUPLEX_ARCHITECTURE.md)
 
-v0.6.1 新增播放位置确认、打断后的对话分支、麦克风音量/设备选择和手动断句。最新真人反馈仍是“收到声音但未能识别”；Windows 听写尚未通过真实麦克风验收，不能宣称完整全双工已经可用。
+v0.6.2 保留播放位置确认和打断后的对话分支，修正连续语句丢失，并将当前机器的识别切换为服务器 Whisper Small（SSH 连接）。三条合成语音及静音检查通过，用户也已确认能识别真实讲话。此前 Windows 听写真人测试失败；复杂重叠对话仍待验证，不能宣称完整原生全双工已经可用。
 
 ```mermaid
 flowchart LR
     MIC[持续收音] --> VAD[能量 VAD]
-    VAD --> ASR[Windows 整句听写]
+    VAD --> ASR[SSH → Whisper Small 整句识别]
     ASR --> STATE[对话事件树]
     TEXT[文字输入] --> STATE
     STATE --> LLM[DeepSeek]
@@ -26,7 +26,7 @@ flowchart LR
 ## 当前能力
 
 - DeepSeek 服务端调用，结构化输出异常时回退为可读文字；停止与重试不会追加重复的用户消息。
-- 浏览器持续录音 → WebSocket → VAD → 本地语音识别 → DeepSeek → 系统语音合成。输出声音时输入保持开启，用户插话会取消旧请求和朗读，丢弃过期识别。
+- 浏览器持续录音 → WebSocket → VAD → 语音识别 → DeepSeek → 系统语音合成。输出声音时输入保持开启，插话取消旧回答和朗读；已说出的连续语句按序识别，避免被下一句覆盖。
 - 语音必须主动点击开启；关闭后立即释放麦克风。无语音服务时仍可打字。
 - 六种表情和对应文字色，可关闭颜色与动作；无专注计时、任务执行或提醒页面。
 - 自愿提交文字评价，生成可审阅的策略候选；独立真人比较满足门槛后才晋级，并保留旧版本。
@@ -46,15 +46,17 @@ npm start
 
 打开 http://127.0.0.1:8788 。也可指定 `XIM_CONFIG` 指向仓库外的私有 JSON 配置，字段为 `api_key`；兼容原有 BandiPrivate 本机配置。
 
-语音识别需要 Python 3.11+。Windows 默认使用已安装的中文听写引擎，建议在 PowerShell 7 的另一个终端启动：
+新安装建议 Python 3.11+；Windows 未配置远程服务时使用已安装的中文听写引擎。当前机器已通过 `private/asr.json` 选择 SSH 连接的服务器识别。建议在 PowerShell 7 的另一个终端启动：
 
 ```powershell
 ./Start_Voice.ps1
 ```
 
-中文听写引擎须已安装。它在独立进程中保持预热，音频只经内存传递。ASR 服务监听 127.0.0.1:8791。刷新页面，点击「开始语音」，授权麦克风。
+配置远程识别时，启动脚本检查连接；连接失效会请求 SSH 密码并重建通道，密码不保存到文件。SSH 主机须已在 `known_hosts` 中，脚本不会自动信任新主机。没有远程配置时，兼容路径要求已安装中文听写引擎，服务监听 127.0.0.1:8791。刷新页面，点击「开始语音」，授权麦克风。
 
-设置 `$env:ASR_ENGINE='whisper'` 后运行相同脚本，可安装并使用 faster-whisper。首次安装与下载模型较慢；tiny 是 CPU 起步配置，`ASR_MODEL=small` 可切换模型，GPU 另需匹配 CUDA。该机器的 Windows 应用控制拦截了新装 NumPy 原生组件，因此这里验证的是系统中文识别后端，Whisper 尚未在该机器完成推理验证。不要关闭系统安全控制来加载组件。
+远程部署说明见 [识别服务部署](docs/ASR_DEPLOYMENT.md)。`private/`、模型、依赖目录和录音均不进入 GitHub；配置文件只存连接信息，不存密码。远程识别启用时，麦克风音频发送到用户配置的服务器处理。
+
+设置 `$env:ASR_ENGINE='whisper'` 后运行相同脚本，可在支持该依赖的环境安装并使用 faster-whisper。首次安装与下载模型较慢；tiny 是 CPU 起步配置，`ASR_MODEL=small` 可切换模型，GPU 另需匹配 CUDA。该 Windows 机器的应用控制拦截了新装 NumPy 原生组件，因此没有在本机加载它；当前实际 Whisper 推理运行在独立 Linux 服务器。不要关闭系统安全控制来加载组件。
 
 Linux/macOS 可创建虚拟环境、安装 `requirements-asr.txt` 后运行 `python scripts/asr_worker.py`。配置项见 `.env.example`；当前不自动读取 `.env`。
 

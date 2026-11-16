@@ -2,14 +2,15 @@
 import json, os, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 engine=os.environ.get("ASR_ENGINE","whisper")
-model_name="Windows zh-CN dictation" if engine=="windows" else os.environ.get("ASR_MODEL","tiny")
+model_path=os.environ.get("ASR_MODEL","tiny")
+model_name="Windows zh-CN dictation" if engine=="windows" else os.environ.get("ASR_MODEL_LABEL",model_path)
 if engine=="windows":
     from windows_asr import WindowsASR
     native=WindowsASR()
 else:
     import numpy as np
     from faster_whisper import WhisperModel
-    model=WhisperModel(model_name,device=os.environ.get("ASR_DEVICE","cpu"),compute_type=os.environ.get("ASR_COMPUTE_TYPE","int8"))
+    model=WhisperModel(model_path,device=os.environ.get("ASR_DEVICE","cpu"),compute_type=os.environ.get("ASR_COMPUTE_TYPE","int8"),cpu_threads=int(os.environ.get("ASR_THREADS","4")))
 lock=threading.Lock()
 class Handler(BaseHTTPRequestHandler):
     def log_message(self,*args): pass
@@ -38,4 +39,4 @@ class Handler(BaseHTTPRequestHandler):
             self.send(200,result)
         except Exception: self.send(503,{"error":"transcription_failed"})
         finally: lock.release()
-ThreadingHTTPServer(("127.0.0.1",8791),Handler).serve_forever()
+ThreadingHTTPServer(("127.0.0.1",int(os.environ.get("ASR_PORT","8791"))),Handler).serve_forever()

@@ -227,10 +227,10 @@ $('clear').onclick=()=>{
 fetch('/api/bootstrap').then(r=>{
   if(!r.ok)throw Error('bootstrap failed');return r.json();
 }).then(x=>{
-  boot=x;$('connection').textContent=x.configured?'已连接 DeepSeek':'本地体验';
-  if(!x.configured)$('connection').dataset.offline='';
+  boot=x;
+  if(!x.configured)note('对话服务尚未配置，请先连接模型。');
   window.dispatchEvent(new CustomEvent('xim:bootstrap',{detail:x}));
-}).catch(()=>{$('connection').textContent='连接中断';$('connection').dataset.offline='';note('无法连接本机服务，请重新打开伴点。');});
+}).catch(()=>{note('无法连接本机服务，请重新打开伴点。');});
 
 
 window.ximChat={send,stop:()=>stop(true),note,subtitle,mood,get token(){return boot?.token},get busy(){return Boolean(active)},get speaking(){return Boolean(window.speechSynthesis?.speaking)}};

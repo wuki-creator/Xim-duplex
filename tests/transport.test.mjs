@@ -6,12 +6,12 @@ import {spawn} from 'node:child_process';
 import {once} from 'node:events';
 import {WebSocket} from 'ws';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-test('voice transport authenticates, survives malformed origins, and drops superseded transcription', {timeout:15000}, async t=>{
+test('voice transport authenticates and preserves successive speech until the user finishes', {timeout:15000}, async t=>{
   let calls=0,recognizing=false,retries=0;
   const asr=http.createServer(async(req,res)=>{
     if(req.url==='/health'){res.end('{"ready":true}');return;}
     for await(const chunk of req){}
-    if(recognizing){retries++;res.writeHead(429);res.end('{}');return;}
+    if(recognizing||(calls===1&&retries===0)){retries++;res.writeHead(429);res.end('{}');return;}
     recognizing=true;
     const i=++calls;await sleep(i===1?450:10);
     recognizing=false;res.setHeader('Content-Type','application/json');res.end(JSON.stringify({text:i===1?'旧内容':'新的话'}));
@@ -30,11 +30,15 @@ test('voice transport authenticates, survives malformed origins, and drops super
   while(!events.some(e=>e.type==='ready'))await sleep(10);
   const loud=Buffer.alloc(1600);for(let i=0;i<800;i++)loud.writeInt16LE(6000,i*2);const quiet=Buffer.alloc(1600);
   const utterance=()=>{for(let i=0;i<8;i++)ws.send(loud);for(let i=0;i<16;i++)ws.send(quiet);};
-  utterance();while(calls<1)await sleep(10);utterance();
+  utterance();while(calls<1)await sleep(10);
+  for(let i=0;i<8;i++)ws.send(loud);
+  await sleep(550);
+  assert.equal(events.filter(e=>e.type==='transcript').length,0,'does not answer the first segment while the user is still speaking');
+  for(let i=0;i<16;i++)ws.send(quiet);
   for(let i=0;i<100&&!events.some(e=>e.type==='transcript');i++)await sleep(25);
   assert.equal(events.filter(e=>e.type==='speech.start').length,2);
-  assert.deepEqual(events.filter(e=>e.type==='transcript').map(e=>e.text),['新的话']);
-  assert.ok(retries>0,'waits for the superseded ASR request without ending microphone capture');
+  assert.deepEqual(events.filter(e=>e.type==='transcript').map(e=>e.text),['旧内容 新的话']);
+  assert.ok(retries>0,'waits for a busy recognizer without losing the completed user segment');
   assert.equal(events.filter(e=>e.type==='speech.end').length,2);
   ws.send(JSON.stringify({type:'sensitivity',threshold:.006}));
   for(let i=0;i<8;i++)ws.send(loud);

@@ -14,7 +14,9 @@ let privateConfig={};
 try {privateConfig=JSON.parse(await fs.readFile(process.env.XIM_CONFIG||path.join(os.homedir(),'AppData/Local/BandiPrivate/config.json'),'utf8'));}catch{}
 const key=process.env.DEEPSEEK_API_KEY||privateConfig.api_key;
 const model=process.env.DEEPSEEK_MODEL||'deepseek-flash';
-const asrURL=process.env.ASR_URL||'http://127.0.0.1:8791';
+let asrConfig={};
+try {asrConfig=JSON.parse(await fs.readFile(path.join(root,'private/asr.json'),'utf8'));}catch{}
+const asrURL=process.env.ASR_URL||asrConfig.url||'http://127.0.0.1:8791';
 const token=crypto.randomBytes(32).toString('hex'),replies=new Map(),rate=[];
 let inflight=0;
 const allowed=new Set(['127.0.0.1:'+port,'localhost:'+port]);
@@ -28,7 +30,7 @@ const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://localhost');
   if(req.method==='GET'&&url.pathname==='/api/bootstrap'){
     const asr=await fetch(asrURL+'/health',{signal:AbortSignal.timeout(1000)}).then(r=>r.json()).catch(()=>({ready:false}));
-    return send(res,200,{token,configured:Boolean(key),model,emotions,asrReady:asr.ready===true,asrModel:asr.model||null,version:'0.6.1',policy:styles.id});
+    return send(res,200,{token,configured:Boolean(key),model,emotions,asrReady:asr.ready===true,asrModel:asr.model||null,version:'0.6.2',policy:styles.id});
   }
   if(url.pathname.startsWith('/api/')){
     if(req.method!=='POST'||req.headers['x-bandi-token']!==token||!String(req.headers['content-type']).startsWith('application/json')||
@@ -86,9 +88,17 @@ server.on('upgrade',(req,socket,head)=>{
 wss.on('connection',ws=>{
   let authorized=false,closed=false,last=Date.now(),current=null,seq=0;
   const output=data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));};
-  const vad=new VadSegmenter({onStart:()=>{seq++;current?.abort();output({type:'speech.start',seq});},onEnd:async pcm=>{
-    const my=seq;current?.abort();const controller=new AbortController();current=controller;
-    output({type:'speech.end',seq:my,durationMs:Math.round(pcm.length/32)});
+  const pendingAudio=[],recognized=[];let recognizing=false;
+  const vad=new VadSegmenter({onStart:()=>{seq++;output({type:'speech.start',seq});},onEnd:pcm=>{
+    output({type:'speech.end',seq,durationMs:Math.round(pcm.length/32)});
+    if(pendingAudio.length>=3){output({type:'error',message:'识别暂时跟不上，请稍后重连或使用文字。'});ws.close(1013,'Recognition backlog');return;}
+    pendingAudio.push(pcm);void transcribePending();
+  }});
+  async function transcribePending(){
+   if(recognizing||closed)return;
+   recognizing=true;let failed=false;
+   while(pendingAudio.length&&!closed){
+    const pcm=pendingAudio.shift(),controller=new AbortController();current=controller;
     let timedOut=false;const timer=setTimeout(()=>{timedOut=true;controller.abort();},20000);
     try{
       let response;
@@ -98,10 +108,22 @@ wss.on('connection',ws=>{
       } while(response.status===429);
       if(!response.ok)throw Error('asr');
       const result=await response.json();
-      if(!closed&&my===seq)output({type:'transcript',text:typeof result.text==='string'?result.text.slice(0,2000):'',reason:['no_match','low_confidence'].includes(result.reason)?result.reason:null,seq});
-    }catch{if(!closed&&my===seq&&(!controller.signal.aborted||timedOut))output({type:'error',message:timedOut?'语音识别超时，请重试或使用文字对话。':'语音识别暂不可用，请使用文字对话。'});}
+      if(!closed)recognized.push({text:typeof result.text==='string'?result.text.slice(0,2000):'',reason:['no_match','low_confidence'].includes(result.reason)?result.reason:'no_match'});
+    }catch{
+      failed=true;pendingAudio.length=0;recognized.length=0;
+      if(!closed&&(!controller.signal.aborted||timedOut))output({type:'error',message:timedOut?'语音识别超时，请重试或使用文字对话。':'语音识别暂不可用，请使用文字对话。'});
+      break;
+    }
     finally{clearTimeout(timer);}
-  }});
+   }
+   recognizing=false;
+   if(!closed&&!failed&&!vad.active&&recognized.length){
+     // Preserve every completed user segment. Never answer while a later segment is still being spoken.
+     const missed=recognized.find(item=>!item.text.trim());
+     output({type:'transcript',text:missed?'':recognized.map(item=>item.text).join(' ').slice(0,2000),reason:missed?.reason||null,seq});
+     recognized.length=0;
+   }
+  }
   const authTimer=setTimeout(()=>{if(!authorized)ws.close(1008,'Authentication required');},5000);
   const idle=setInterval(()=>{if(Date.now()-last>30000)ws.close(1000,'Idle');},10000);
   ws.on('message',(data,binary)=>{

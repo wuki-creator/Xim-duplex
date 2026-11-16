@@ -84,14 +84,14 @@ button.onclick=async()=>{
         window.dispatchEvent(new Event('xim:speech-start'));status.textContent='正在听你说…';
       }else if(msg.type==='speech.end'){
         speechAt=0;finish.disabled=true;status.textContent='正在识别这句话…';
-        hint.textContent='已收到 '+(msg.durationMs/1000).toFixed(1)+' 秒声音，等待本机中文听写结果。';
+        hint.textContent='已收到 '+(msg.durationMs/1000).toFixed(1)+' 秒声音，正在转成文字。';
       }else if(msg.type==='no_speech'){
         hint.textContent='还没有检测到完整声音，请检查音量条并尝试“轻声”。';
       }else if(msg.type==='transcript'){
         speechAt=0;finish.disabled=true;
         status.textContent=msg.text?'听到了，正在回应':'没听清，可以再说一次。';
         if(msg.text){transcript.textContent='听到：'+msg.text;hint.textContent='麦克风持续开启，可以继续说或打断。';}
-        else hint.textContent=msg.reason==='low_confidence'?'已收到声音，但中文听写结果置信度过低。请靠近麦克风、佩戴耳机再试。':'已收到声音，但本机中文听写未能识别。可以换一句短句，或使用文字。';
+        else hint.textContent=msg.reason==='low_confidence'?'已收到声音，但识别结果置信度过低。请靠近麦克风、佩戴耳机再试。':'已收到声音，但语音服务未能识别。可以换一句短句，或使用文字。';
         window.dispatchEvent(new CustomEvent('xim:transcript',{detail:msg.text||''}));
       }else if(msg.type==='error')stop(msg.message);
     };
