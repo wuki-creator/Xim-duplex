@@ -11,6 +11,19 @@ test('spoken meeting size and approval require explicit phrasing',()=>{
   assert.deepEqual(explicitApproval('确认执行 小鹿的方案。'),{target:'小鹿',all:false});
 });
 
+test('explicitly addressed assignment goes straight to proposal instead of reorganizing the meeting',async()=>{
+  let calls=0;
+  const service=new MeetingService({url:'http://127.0.0.1:19999',model:'mock',request:async(_url,opts)=>{
+    calls++;const content=JSON.parse(opts.body).messages[0].content;
+    assert.match(content,/简短方案/);
+    return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({title:'检查清单',steps:[{time:'1分钟',action:'检查语音',dialogue:'开始测试'}],questions:[]})}}]});
+  }});
+  const room=service.create(),signal=AbortSignal.timeout(10000);
+  await service.input(room.id,'组织三个人开会',null,signal);
+  await service.input(room.id,room.participants[0].name+'，请为演示制作检查清单',null,signal);
+  assert.equal(calls,1);assert.equal(room.tasks[0].status,'proposed');assert.equal(room.tasks[0].agent,room.participants[0].id);assert.match(room.tasks[0].plan.steps[0],/检查语音/);
+});
+
 test('agents form proposals first, revision invalidates the old approval, and explicit confirmation produces a result',async()=>{
   const mock=[];let solves=0;
   const service=new MeetingService({url:'http://127.0.0.1:19999',model:'mock',request:async()=>{

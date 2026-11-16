@@ -46,6 +46,8 @@ class Handler(BaseHTTPRequestHandler):
             finally: lock.release()
             self.send_json(200,{'choices':[{'message':{'role':'assistant','content':content},'finish_reason':'stop' if stopped else 'length'}]})
         except (ValueError,TypeError,KeyError,json.JSONDecodeError): self.send_json(400,{'error':'invalid_input'})
-        except Exception: self.send_json(500,{'error':'inference_failed'})
+        except Exception as error:
+            print('inference_failed:',type(error).__name__,flush=True)
+            self.send_json(500,{'error':'inference_failed'})
 
 ThreadingHTTPServer(('127.0.0.1',args.port),Handler).serve_forever()

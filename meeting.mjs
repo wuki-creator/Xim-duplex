@@ -6,6 +6,11 @@ const names=['小鹿','阿晨','林舟','夏禾','苏墨','江雨','安可','叶
 const roles=['方案设计','工程实现','资料分析','体验设计','风险验证','任务协调','结果评估','质量复核'];
 const cut=(v,n)=>typeof v==='string'?v.trim().slice(0,n):'';
 const lines=(v,n=5)=>Array.isArray(v)?v.map(s=>cut(s,300)).filter(Boolean).slice(0,n):[];
+const planSteps=v=>Array.isArray(v)?v.map(item=>{
+  if(typeof item==='string')return cut(item,300);
+  if(!item||typeof item!=='object'||Array.isArray(item))return '';
+  return ['time','action','dialogue','description'].map(k=>cut(item[k],120)).filter(Boolean).join(' · ').slice(0,300);
+}).filter(Boolean).slice(0,5):[];
 const chinese={一:1,二:2,两:2,三:3,四:4,五:5,六:6,七:7,八:8,九:9,十:10};
 export class MeetingError extends Error{constructor(code,message,status=400){super(message);this.code=code;this.status=status;}}
 const invalid=(code,message,status)=>{throw new MeetingError(code,message,status);};
@@ -80,7 +85,11 @@ export class MeetingService{
           const topic=text.match(/(?:主题(?:是|为)?|讨论主题(?:是|为)?)[:：\s]*([^。！？]+)/)?.[1];
           this.resize(room,count,topic);
         }else{
-          const intent=await this.ask(router,{...this.context(room),text,selected},signal,550);
+          // Explicitly addressed assignments should not be mistaken for organizing a meeting.
+          const named=room.participants.find(p=>text.startsWith(p.name));
+          const remainder=named?text.slice(named.name.length).replace(/^\s*[,，:：]\s*/u,''):'';
+          const direct=named&&/^(?:请|帮我)(?:为|帮|完成|制作|设计|写|整理|分析|计算)/u.test(remainder);
+          const intent=direct?{action:'assign',agent:named.id,task:remainder}:await this.ask(router,{...this.context(room),text,selected},signal,550);
           await this.route(room,intent,text,selected,signal);
         }
       }
@@ -99,8 +108,9 @@ export class MeetingService{
       let current=room.tasks.findLast(t=>t.agent===agent.id&&['clarifying','proposed'].includes(t.status));
       if(intent.action==='revise'&&!current){this.note(room,agent.id,'我还没有待修改的方案，请先给我派活。');return;}
       const scope=intent.action==='revise'?cut(current.task+'\n最新修改：'+task,1100):task;
-      const proposed=await this.ask(baseRules+' 可执行范围是整理、分析、生成文字交付物；已给齐数值时可计算工作台的机械臂轨迹或自由落体。先提出方案，不执行。输出 {"title":"题目","steps":["步骤"],"questions":["确实阻碍执行才问"],"note":"对用户说的话","operation":{"job":"arm","start":[x,y,z],"target":[x,y,z]}}。operation仅当用户给齐精确坐标并要求算轨迹才填写，缺少就不填。', {agent,task:scope,topic:room.topic,context:room.messages.slice(-8)},signal,900);
-      const plan={title:cut(proposed.title,100)||'任务方案',steps:lines(proposed.steps),questions:lines(proposed.questions,4),operation:this.operation(proposed.operation,input)};
+      const proposed=await this.ask(baseRules+' 先给用户一个简短方案，不要执行。输出 JSON，包含 title（标题）、steps（2到4个具体步骤的数组）、questions（只有缺少关键条件时才提问，否则为空数组）、note（面向用户的一句话）。例如：{"title":"整理方案","steps":["梳理要求","整理成果"],"questions":[],"note":"请确认方案。"}。可填写 operation：只有用户明确提供起点、终点坐标并要求计算机械臂轨迹时，使用 {"job":"arm","start":[x,y,z],"target":[x,y,z]}，其他情况省略。', {agent,task:scope,topic:room.topic,context:room.messages.slice(-4)},signal,600);
+      const questions=lines(proposed.questions,4).filter(q=>q!=='确实阻碍执行才问');
+      const plan={title:cut(proposed.title,100)||'任务方案',steps:planSteps(proposed.steps),questions,operation:this.operation(proposed.operation,input)};
       if(!plan.steps.length&&!plan.questions.length){this.note(room,agent.id,'我还没能形成可检视的方案，可以补充交付要求吗？');return;}
       if(!current){current={id:randomUUID(),agent:agent.id,rev:0};room.tasks.push(current);if(room.tasks.length>24)room.tasks.shift();}
       Object.assign(current,{task:scope,plan,status:plan.questions.length||!plan.steps.length?'clarifying':'proposed',rev:current.rev+1,result:null});

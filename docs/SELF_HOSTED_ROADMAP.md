@@ -31,7 +31,7 @@
 
 环境变量见 [.env.example](../.env.example)。v0.8.1 的 `tts_demo_id` 与 Nano `/api/generate` 不再支持；旧 `private/moss.json` 和 `MOSS_*` 设置不再读取。原私有研究材料没有删除或上传。当前没有部署独立神经语音模型或图像模型，通用接口只通过模拟工作服务验证。
 
-随仓库提供 `scripts/local_chat_worker.py`：从本地目录加载 Qwen2.5-1.5B-Instruct，在单 GPU 上监听回环地址，提供 `/health` 与 `/v1/chat/completions`。它要求匹配的 CUDA、PyTorch、Transformers 和经过校验的模型文件；不自动联网下载。当前为验证用途的串行推理服务，不具备真正的模型生成中止或高并发生产调度。取消请求可阻止旧回答进入前端，但服务端已开始的计算可能继续到当前生成完成。
+随仓库提供 `scripts/local_chat_worker.py`：从本地目录加载 Qwen2.5-1.5B-Instruct，在单 GPU 上监听回环地址，提供 `/health` 与 `/v1/chat/completions`。它要求匹配的 CUDA、PyTorch、Transformers、Jinja2 和经过校验的模型文件；不自动联网下载。当前为验证用途的串行推理服务，不具备真正的模型生成中止或高并发生产调度。取消请求可阻止旧回答进入前端，但服务端已开始的计算可能继续到当前生成完成。
 
 ## 数据与训练
 

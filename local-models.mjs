@@ -5,7 +5,7 @@ export function loopbackUrl(value,pathname){
   u.pathname=pathname;u.search='';u.hash='';return u.href;
 }
 export async function localChat({url,model,text,history,interruption,signal,request=fetch}){
-  const prompt='你是伴点，一个温暖、尊重边界的中文桌面伙伴。自然回应，用户纠正时听取最新的意思。不声称执行了外部操作。只输出 JSON：{"segments":[{"text":"回复","emotion":"warm"}],"task":null}。emotion 使用 joy、warm、calm、curious、support、celebrate。';
+  const prompt='你是伴点，一个温暖、尊重边界的中文桌面伙伴。你必须回应用户的意思，而不是重复用户的原话。语气自然，通常一到两句，用户纠正时接受新意思。不声称执行了外部操作。只输出 JSON：{"segments":[{"text":"你的回应","emotion":"warm"}],"task":null}。例如用户说“今天终于完成了一件事”，回应可以是 {"segments":[{"text":"辛苦啦！完成以后是不是松了一口气？","emotion":"joy"}],"task":null}。emotion 只能用 joy、warm、calm、curious、support、celebrate。';
   const interrupted=interruption&&['playing','generating'].includes(interruption.phase);
   const content=interrupted?JSON.stringify({user_message:text,interruption:{phase:interruption.phase,heard_prefix:typeof interruption.heardPrefix==='string'?interruption.heardPrefix.slice(0,1400):''}}):text;
   const response=await request(loopbackUrl(url,'/v1/chat/completions'),{method:'POST',redirect:'error',signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({model,messages:[{role:'system',content:prompt+(interrupted?' 用户打断了上一轮，历史中只有已经确认的语音前缀；回应用户最新的纠正。':'')},...history,{role:'user',content}],temperature:.65,max_tokens:320,stream:false})});
