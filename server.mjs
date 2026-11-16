@@ -13,6 +13,7 @@ import {connectLive} from './moss-live.mjs';
 import {nexModel,asrModels,transcribeMoss,synthesizeMoss} from './moss-models.mjs';
 import {interpretWorkbench,computeWorld,generateWorkbenchImage} from './workbench.mjs';
 import {MeetingService,MeetingError} from './meeting.mjs';
+import {localChat,localNanoSpeech,loopbackUrl} from './local-models.mjs';
 const root=path.dirname(fileURLToPath(import.meta.url)),port=Number(process.env.PORT||8788);
 let privateConfig={};
 try {privateConfig=JSON.parse(await fs.readFile(process.env.XIM_CONFIG||path.join(os.homedir(),'AppData/Local/BandiPrivate/config.json'),'utf8'));}catch{}
@@ -26,13 +27,20 @@ try {mossConfig=JSON.parse(await fs.readFile(path.join(root,'private/moss.json')
 const mossKey=process.env.MOSS_API_KEY||mossConfig.api_key;
 const mossChat=Boolean(mossKey&&(process.env.XIM_CHAT_PROVIDER||mossConfig.chat)==='moss');
 const mossASR=process.env.MOSS_ASR_MODEL||mossConfig.asr;
-const cloudAsr=Boolean(mossKey&&asrModels.has(mossASR));
 const mossVoice=process.env.MOSS_TTS_VOICE_ID||mossConfig.tts_voice_id;
 const liveAvailable=Boolean(mossKey&&(process.env.MOSS_LIVE||mossConfig.live)!==false&&process.env.MOSS_LIVE!=='0');
 const liveVoice=process.env.MOSS_LIVE_VOICE_ID||mossConfig.live_voice_id;
 let workbenchConfig={};
 try{workbenchConfig=JSON.parse(await fs.readFile(path.join(root,'private/workbench.json'),'utf8'));}catch{}
 const computeRemote=process.env.XIM_COMPUTE_URL||workbenchConfig.compute_url||'';
+let localConfig={};try{localConfig=JSON.parse(await fs.readFile(path.join(root,'private/local-models.json'),'utf8'));}catch{}
+const localChatUrl=process.env.XIM_LOCAL_CHAT_URL||localConfig.chat_url||'';
+const localChatModel=process.env.XIM_LOCAL_CHAT_MODEL||localConfig.chat_model||'';
+const localTtsUrl=process.env.XIM_LOCAL_TTS_URL||localConfig.tts_url||'';
+const localVoice=process.env.XIM_LOCAL_VOICE||localConfig.tts_demo_id||'demo-1';
+const voiceLocal=(process.env.XIM_VOICE_MODE||localConfig.voice_mode)==='local';
+const cloudAsr=Boolean(!voiceLocal&&mossKey&&asrModels.has(mossASR));
+for(const url of [localChatUrl,localTtsUrl].filter(Boolean))loopbackUrl(url,'/');
 let workbenchBusy=0,imageBusy=false;
 const meeting=new MeetingService({key,model,remote:computeRemote});
 const token=crypto.randomBytes(32).toString('hex'),replies=new Map(),rate=[];
@@ -48,7 +56,7 @@ const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://localhost');
   if(req.method==='GET'&&url.pathname==='/api/bootstrap'){
     const asr=await fetch(asrURL+'/health',{signal:AbortSignal.timeout(1000)}).then(r=>r.json()).catch(()=>({ready:false}));
-    return send(res,200,{token,configured:Boolean(key||mossChat),model:mossChat?nexModel:model,emotions,asrReady:asr.ready===true||cloudAsr,asrModel:cloudAsr?mossASR:asr.model||null,voiceLive:liveAvailable,cloudAsr,cloudTts:Boolean(mossKey&&mossVoice),version:'0.8.0',policy:styles.id});
+    return send(res,200,{token,configured:Boolean(key||mossChat||(localChatUrl&&localChatModel)),model:localChatUrl?localChatModel:mossChat?nexModel:model,emotions,asrReady:asr.ready===true||cloudAsr,asrModel:cloudAsr?mossASR:asr.model||null,voiceLive:liveAvailable,voiceMode:voiceLocal?'cascade':'live',cloudAsr,cloudTts:Boolean(localTtsUrl||(!voiceLocal&&mossKey&&mossVoice)),version:'0.8.1',policy:styles.id});
   }
   if(url.pathname.startsWith('/api/')){
     if(req.method!=='POST'||req.headers['x-bandi-token']!==token||!String(req.headers['content-type']).startsWith('application/json')||
@@ -91,7 +99,7 @@ const server=http.createServer(async(req,res)=>{
     }
     if(url.pathname==='/api/chat'){
       if(typeof b.text!=='string'||!b.text.trim()||b.text.length>2000)return send(res,400,{error:'INVALID_INPUT'});
-      if(!key&&!mossChat)return send(res,503,{error:'MODEL_NOT_CONFIGURED'});
+      if(!key&&!mossChat&&!(localChatUrl&&localChatModel))return send(res,503,{error:'MODEL_NOT_CONFIGURED'});
       const now=Date.now();while(rate.length&&rate[0]<now-60000)rate.shift();
       if(inflight>=2||rate.length>=20)return send(res,429,{error:'TOO_MANY_REQUESTS'});
       rate.push(now);inflight++;
@@ -101,7 +109,11 @@ const server=http.createServer(async(req,res)=>{
         const history=Array.isArray(b.history)?b.history.slice(-10).filter(m=>m&&['user','assistant'].includes(m.role)&&typeof m.content==='string'&&m.content.length<=2000):[];
         const params={text:b.text,history,interruption:b.interruption,style:'warm',signal:controller.signal,policy:styles.instruction};
         let result,usedModel=model;
-        if(mossChat){
+        if(localChatUrl&&localChatModel){
+          try{result=await localChat({url:localChatUrl,model:localChatModel,text:b.text,history,interruption:b.interruption,signal:AbortSignal.any([controller.signal,AbortSignal.timeout(12000)])});usedModel=localChatModel;}
+          catch(error){if(!key&&!mossChat||controller.signal.aborted)throw error;}
+        }
+        if(!result&&mossChat){
           try{result=await getModelReply({...params,key:mossKey,model:nexModel,provider:'moss',signal:AbortSignal.any([controller.signal,AbortSignal.timeout(12000)])});usedModel=nexModel;}
           catch(error){if(!key||controller.signal.aborted||error.code==='MODEL_FILTERED')throw error;}
         }
@@ -113,7 +125,7 @@ const server=http.createServer(async(req,res)=>{
       finally{clearTimeout(timeout);inflight--;}
     }
     if(url.pathname==='/api/speech'){
-      if(!mossKey||!mossVoice)return send(res,503,{error:'SPEECH_NOT_CONFIGURED'});
+      if(!localTtsUrl&&(voiceLocal||!mossKey||!mossVoice))return send(res,503,{error:'SPEECH_NOT_CONFIGURED'});
       const entry=replies.get(b.id);
       const text=entry&&Number.isInteger(b.offset)&&Number.isInteger(b.end)?entry.segments.map(s=>s.text).join('\n').slice(b.offset,b.end):'';
       if(!text.trim()||b.offset<0||b.end-b.offset>90)return send(res,400,{error:'INVALID_INPUT'});
@@ -122,7 +134,8 @@ const server=http.createServer(async(req,res)=>{
       ttsInflight++;ttsRate.push(now);
       const controller=new AbortController();res.on('close',()=>controller.abort());
       try{
-        const wav=await synthesizeMoss({key:mossKey,voice:mossVoice,text,signal:AbortSignal.any([controller.signal,AbortSignal.timeout(8000)])});
+        const speechSignal=AbortSignal.any([controller.signal,AbortSignal.timeout(localTtsUrl?30000:8000)]);
+        const wav=localTtsUrl?await localNanoSpeech({url:localTtsUrl,text,demoId:localVoice,signal:speechSignal}):await synthesizeMoss({key:mossKey,voice:mossVoice,text,signal:speechSignal});
         if(!res.destroyed){res.writeHead(200,{'Content-Type':'audio/wav','Content-Length':wav.length,'Cache-Control':'no-store'});res.end(wav);}
       }catch{return send(res,502,{error:'SPEECH_UNAVAILABLE'});}finally{ttsInflight--;}
       return;

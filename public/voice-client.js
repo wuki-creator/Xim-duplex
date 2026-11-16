@@ -83,7 +83,8 @@ button.onclick=async()=>{
   try{
     const boot=await fetch('/api/bootstrap').then(r=>r.json());if(ticket!==generation)return;
     voiceBoot=boot;
-    if(route==='live'&&!boot.voiceLive){stop('实时语音尚未配置，请选择基础语音。');return;}
+    if(compact&&boot.voiceMode==='cascade')route='cascade';
+    if(route==='live'&&!boot.voiceLive){stop('实时语音尚未配置，请检查语音服务。');return;}
     if(route!=='live'&&!boot.asrReady){stop('基础语音服务未启动，文字对话可正常使用。');return;}
     if(!navigator.mediaDevices?.getUserMedia){stop('此浏览器无法访问麦克风。');return;}
     const media=await navigator.mediaDevices.getUserMedia({audio:{...(devices.value?{deviceId:{exact:devices.value}}:{}),channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});

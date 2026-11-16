@@ -1,7 +1,7 @@
 import {World,palette} from './world.js';
 const $=id=>document.getElementById(id),coords=['px','py','pz'].map($),history=[];
 const labels={box:'方块',sphere:'球体',cylinder:'圆柱'};
-const errors={UNREACHABLE:'目标超出虚拟机械臂的活动范围，或直线经过底座附近。请把目标移近一些。',MODEL_UNAVAILABLE:'暂时连不上 DeepSeek，请再试一次。',MODEL_NOT_CONFIGURED:'请先配置 DeepSeek 连接。',COMPUTE_UNAVAILABLE:'暂时无法完成计算。',IMAGE_NOT_CONFIGURED:'图片服务尚未配置。',IMAGE_BALANCE:'模思账号的图片余额不足。',IMAGE_FORBIDDEN:'当前账号没有生图权限，或请求未通过平台审核。',IMAGE_UNAVAILABLE:'暂时无法生成图片，请稍后重试。',BUSY:'上一项操作还在继续，请稍等。'};
+const errors={PATH_BLOCKED:'机械臂末端的直线路径经过其他物体，请移动障碍物或换一个目标。',UNREACHABLE:'目标超出虚拟机械臂的活动范围，或直线经过底座附近。请把目标移近一些。',MODEL_UNAVAILABLE:'暂时连不上 DeepSeek，请再试一次。',MODEL_NOT_CONFIGURED:'请先配置 DeepSeek 连接。',COMPUTE_UNAVAILABLE:'暂时无法完成计算。',IMAGE_NOT_CONFIGURED:'图片服务尚未配置。',IMAGE_BALANCE:'模思账号的图片余额不足。',IMAGE_FORBIDDEN:'当前账号没有生图权限，或请求未通过平台审核。',IMAGE_UNAVAILABLE:'暂时无法生成图片，请稍后重试。',BUSY:'上一项操作还在继续，请稍等。'};
 let world,boot,report,imagePrompt,planning,armPending=false,generating=false,voice=false;
 
 try{world=new World($('viewport'),refresh);}catch(error){$('worldError').hidden=false;console.error(error.name);}
@@ -66,7 +66,8 @@ async function motion(action,{target,position:desired}){
   const goal=desired?[desired[0],desired[1]+(action==='place'?offset:0),desired[2]]:item.mesh.position.toArray().map((v,i)=>i===1?v+offset:v);
   const revision=stage.rev;armPending=true;refresh();
   try{
-    const result=await post('compute',{job:'arm',start:stage.arm,target:goal});
+    const obstacles=stage.export().objects.filter(o=>o.id!==(target||(!desired?item?.id:null))&&o.id!==stage.held).map(o=>({position:o.position,size:o.size}));
+    const result=await post('compute',{job:'arm',start:stage.arm,target:goal,obstacles});
     if(stage.rev!==revision)throw Error('场景在计算中发生变化，请重新计算。');
     reportResult(result,'机械臂轨迹 · '+result.samples.length+' 个点');
     if(action==='trajectory'){stage.trace.geometry.setFromPoints(result.samples.map(({position:p})=>stage.grip.clone().set(...p)));log('轨迹已画在场景里。','assistant',true);return;}

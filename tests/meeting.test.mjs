@@ -51,3 +51,16 @@ test('plans that require user clarification and unknown attendees cannot execute
   assert.equal(task.result,null);
   await assert.rejects(service.approve(room.id,task.id,task.rev,signal),{code:'STALE_PLAN'});
 });
+
+test('approved independent agent tasks run concurrently with a bounded worker count',async()=>{
+  let running=0,maximum=0;
+  const service=new MeetingService({key:'mock',model:'mock',request:async()=>{
+    running++;maximum=Math.max(maximum,running);await new Promise(r=>setTimeout(r,35));running--;
+    return Response.json({choices:[{message:{content:JSON.stringify({summary:'完成',deliverables:['已完成具体内容']})}}]});
+  }});
+  const room=service.create(),signal=AbortSignal.timeout(10000);
+  await service.input(room.id,'组织三个人开会',null,signal);
+  for(const p of room.participants)room.tasks.push({id:p.id,agent:p.id,rev:1,task:'总结',status:'proposed',plan:{title:'总结',steps:['整理'],questions:[],operation:null}});
+  await service.input(room.id,'确认执行全部',null,signal);
+  assert.equal(maximum,2);assert.ok(room.tasks.every(t=>t.status==='done'));
+});

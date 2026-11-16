@@ -128,7 +128,10 @@ export class MeetingService{
     return this.snapshot(room);
   }
   async execute(room,tasks,signal){
-    for(const task of tasks.slice(0,8)){
+    // At most two tasks run at once; each retains its own approved revision and result.
+    const queue=tasks.slice(0,8);
+    const worker=async()=>{while(queue.length&&!signal.aborted){
+      const task=queue.shift();
       if(signal.aborted)break;
       task.status='running';const agent=room.participants.find(p=>p.id===task.agent);
       this.note(room,'moderator',`已确认 ${agent.name} 的《${task.plan.title}》。`);
@@ -141,6 +144,7 @@ export class MeetingService{
         task.result={title:cut(result.title,100)||task.plan.title,summary,deliverables,limits:lines(result.limits,5),computation};task.status='done';
         this.note(room,agent.id,'这项任务完成了，成果已放到结果区。');
       }catch(e){task.status='proposed';this.note(room,agent.id,e.message==='COMPUTE_FAILED'?'轨迹计算没成功。请检查目标坐标，修改方案后再确认。':'执行暂时中断，方案已保留。你可以重新确认。');}
-    }
+    }};
+    await Promise.all(Array.from({length:Math.min(queue.length,2)},()=>worker()));
   }
 }

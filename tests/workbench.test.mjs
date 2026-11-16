@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {checkAction,computeWorld,generateWorkbenchImage} from '../workbench.mjs';
+import {checkAction,computeWorld,generateWorkbenchImage,simpleWorkbenchAction} from '../workbench.mjs';
+
+test('simple affirmative scene commands map common colors without a model round trip',()=>{
+  assert.equal(simpleWorkbenchAction('添加一个红色方块。').color,'coral');
+  assert.equal(simpleWorkbenchAction('请添加一个蓝色球').shape,'sphere');
+  assert.equal(simpleWorkbenchAction('不要添加一个红色方块'),null);
+  assert.equal(simpleWorkbenchAction('先不要添加一个红色方块'),null);
+});
 
 test('tool plans only use recognized objects and reject unlisted effects',()=>{
   const objects=[{id:'obj-1'}];
@@ -20,6 +27,7 @@ test('local arm solver returns a forward-consistent trajectory and rejects unrea
     assert.ok(forward.every((x,i)=>Math.abs(x-sample.position[i])<1e-9));
   }
   assert.equal((await computeWorld({job:'arm',start,target:[10,1,0]},options)).error,'UNREACHABLE');
+  assert.equal((await computeWorld({job:'arm',start,target,obstacles:[{position:[2.5,1.3,.45],size:.5}]},options)).error,'PATH_BLOCKED');
 });
 
 test('world solver estimates clean free fall and refuses non-loopback worker URLs',async()=>{

@@ -29,13 +29,29 @@ def solve(target):
 def calculate(data):
     if data.get('job') == 'arm':
         start, target = vector(data.get('start')), vector(data.get('target'))
+        obstacles = data.get('obstacles', [])
+        if not isinstance(obstacles, list) or len(obstacles) > 32:
+            raise ValueError('obstacles')
+        checked = []
+        for obj in obstacles:
+            if not isinstance(obj, dict):
+                raise ValueError('obstacle')
+            p = vector(obj.get('position'))
+            size = obj.get('size')
+            if type(size) not in (int, float) or not math.isfinite(size) or not .2 <= size <= 2.5:
+                raise ValueError('obstacle')
+            checked.append((p, size / 2 + .15))
         frames = []
         for i in range(37):
             t = i / 36
             s = t * t * (3 - 2 * t)
             p = [a + (b - a) * s for a, b in zip(start, target)]
+            # Conservative workspace AABBs around obstacles. This checks the tool point,
+            # not links, articulated objects, rotation, or motion between sampled points.
+            if any(all(abs(p[j] - center[j]) < half for j in range(3)) for center, half in checked):
+                raise ValueError('collision')
             frames.append({'time': round(t * 1.5, 4), 'position': p, 'joints': solve(p)})
-        return {'job': 'arm', 'duration': 1.5, 'samples': frames, 'solver': 'three-joint-ik-v1'}
+        return {'job': 'arm', 'duration': 1.5, 'samples': frames, 'solver': 'three-joint-ik-v2', 'obstaclesChecked':len(checked)}
     if data.get('job') == 'physics':
         objects = data.get('objects')
         if not isinstance(objects, list) or len(objects) > 32:
@@ -61,7 +77,7 @@ def execute(body):
     try:
         return 200, calculate(json.loads(body))
     except ValueError as error:
-        return 400, {'error': 'UNREACHABLE' if str(error) == 'unreachable' else 'INVALID_COMPUTE_INPUT'}
+        return 400, {'error': {'unreachable':'UNREACHABLE','collision':'PATH_BLOCKED'}.get(str(error),'INVALID_COMPUTE_INPUT')}
     except (AttributeError, TypeError, OverflowError):
         return 400, {'error': 'INVALID_COMPUTE_INPUT'}
 

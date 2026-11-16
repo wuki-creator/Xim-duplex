@@ -1,10 +1,12 @@
 # Xim Duplex 当前模型与对话流程
 
-更新时间：2026-11-16 · 代码版本：v0.8.0
+更新时间：2026-11-16 · 代码版本：v0.8.1
 
 [模思模型路由](MOSI_INTEGRATION.md)已用真实 API 验证两轮合成对话。下方的基础链路使用 Whisper + DeepSeek + 设备朗读；实时会话还可在未及时收到回复音频时保留原话并切换回基础链路。
 
 工作台与会议空间各自使用基础转写和 DeepSeek，和主对话舱的 MOSS-Live 会话分开。详细操作与验证边界见 [使用指南](WORKBENCH_AND_MEETING.md)。
+
+主对话也可配置自部署模型与 Nano 语音服务，见[自主部署与微调基线](SELF_HOSTED_ROADMAP.md)；当前已提供接口，实际 Nano 权重尚未部署。
 
 ```mermaid
 flowchart LR
