@@ -19,17 +19,15 @@ export async function localChat({url,model,text,history,interruption,signal,requ
   return {segments,task:null};
 }
 
-export async function localNanoSpeech({url,text,demoId='',signal,request=fetch}){
-  const form=new FormData();form.set('text',text);if(demoId)form.set('demo_id',demoId);
-  const response=await request(loopbackUrl(url,'/api/generate'),{method:'POST',body:form,signal,redirect:'error'});
+// A replaceable local worker contract; no provider demo voices, keys or endpoints.
+export async function localSpeech({url,model,text,voice='default',signal,request=fetch}){
+  const response=await request(loopbackUrl(url,'/v1/audio/speech'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model,input:text,voice,response_format:'wav'}),signal,redirect:'error'});
   if(!response.ok){await response.body?.cancel();throw Error('LOCAL_SPEECH_UNAVAILABLE');}
-  const max=6000000,declared=Number(response.headers.get('content-length'));
+  const max=4000000,declared=Number(response.headers.get('content-length'));
   if(declared>max){await response.body?.cancel();throw Error('LOCAL_SPEECH_UNAVAILABLE');}
   let size=0;const chunks=[];
   for await(const chunk of response.body){size+=chunk.length;if(size>max)throw Error('LOCAL_SPEECH_UNAVAILABLE');chunks.push(chunk);}
-  let payload;try{payload=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw Error('LOCAL_SPEECH_UNAVAILABLE');}
-  if(typeof payload.audio_base64!=='string'||!/^[A-Za-z0-9+/=]+$/.test(payload.audio_base64))throw Error('LOCAL_SPEECH_UNAVAILABLE');
-  const wav=Buffer.from(payload.audio_base64,'base64');
+  const wav=Buffer.concat(chunks);
   if(wav.length<44||wav.length>4000000||wav.toString('ascii',0,4)!=='RIFF'||wav.toString('ascii',8,12)!=='WAVE')throw Error('LOCAL_SPEECH_UNAVAILABLE');
   return wav;
 }

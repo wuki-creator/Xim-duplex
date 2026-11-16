@@ -1,4 +1,4 @@
-"""Prepare a reproducible, speaker-isolated AISHELL-3 manifest for Nano SFT.
+"""Prepare a reproducible, speaker-isolated AISHELL-3 manifest for speech model training.
 
 Uses the official extracted train/content.txt and train/wav/<speaker>/<id>.wav.
 No audio is copied; source paths and checksums are recorded for auditing.

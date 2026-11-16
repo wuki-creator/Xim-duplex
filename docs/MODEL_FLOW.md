@@ -1,19 +1,19 @@
 # Xim Duplex 当前模型与对话流程
 
-更新时间：2026-11-16 · 代码版本：v0.8.1
+更新时间：2026-11-16 · 代码版本：v0.9.0
 
-[模思模型路由](MOSI_INTEGRATION.md)已用真实 API 验证两轮合成对话。下方的基础链路使用 Whisper + DeepSeek + 设备朗读；实时会话还可在未及时收到回复音频时保留原话并切换回基础链路。
+现行产品不调用或微调 MOSS。默认链路是 Xim 收音与打断管理 → 自部署 Whisper → DeepSeek → 设备朗读；三种空间统一使用自己的语音入口。
 
-工作台与会议空间各自使用基础转写和 DeepSeek，和主对话舱的 MOSS-Live 会话分开。详细操作与验证边界见 [使用指南](WORKBENCH_AND_MEETING.md)。
+工作台与会议空间使用 DeepSeek 处理结构化任务，由 Xim 检查方案、确认和执行状态。详细操作与验证边界见 [使用指南](WORKBENCH_AND_MEETING.md)。
 
-主对话也可配置自部署模型与 Nano 语音服务，见[自主部署与微调基线](SELF_HOSTED_ROADMAP.md)；当前已提供接口，实际 Nano 权重尚未部署。
+主对话可配置独立文本和声音服务，图像生成改为自部署服务接口；见[部署说明](SELF_HOSTED_ROADMAP.md)。这些通用接口已经实现，神经语音和图像模型尚未部署。自主研发与训练边界见[技术路线](MODEL_STRATEGY.md)。
 
 ```mermaid
 flowchart LR
     TALK[语音或文字] --> ROUTE[DeepSeek 识别意图]
     ROUTE --> LAB[物理工作台：建物体、下载、虚拟机械臂]
     LAB --> COMPUTE[固定计算：服务器或本机]
-    LAB --> IMAGE[用户确认后调用模思生图]
+    LAB --> IMAGE[用户确认后请求自部署图像服务<br/>未配置时提示不可用]
     ROUTE --> ROOM[会议空间：具名角色与任务]
     ROOM --> PLAN[讨论及方案版本]
     PLAN --> CONFIRM{用户明确确认}
@@ -39,12 +39,12 @@ flowchart TD
     ASR -->|最终文字| TURN[对话事件树<br/>用户意图、父节点、打断状态]
     TEXT --> TURN
     TURN --> CTX[构建上下文<br/>已播放前缀 + 新输入 + 打断信息]
-    CTX --> LLM[DeepSeek API<br/>整段文本生成]
+    CTX --> LLM[可替换本地文本模型 / DeepSeek API<br/>当前默认 DeepSeek 整段文本生成]
     LLM --> JSON[解析情绪段落<br/>结构异常时重试纯文字]
     JSON --> UI[对话气泡与情绪文字色]
     JSON --> PET[Three.js 角色表情]
     JSON --> CHUNK[短段朗读队列]
-    CHUNK --> TTS[浏览器 SpeechSynthesis]
+    CHUNK --> TTS[可替换本地语音 / 浏览器朗读<br/>当前默认设备声音]
     TTS --> OUT[扬声器 / 耳机]
     TTS -->|boundary / end| ACK[确认播放位置<br/>无 boundary 时按完整短段确认]
     ACK --> TURN

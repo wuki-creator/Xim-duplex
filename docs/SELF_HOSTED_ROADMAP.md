@@ -1,48 +1,36 @@
-# Xim 自主部署与微调基线
+# Xim 自部署配置
 
-更新：2026-11-16 · v0.8.1。Xim 是本项目自己的产品名；衍生模型保留原模型来源、许可证和版本信息，不能通过改名移除上游归属或许可要求。
+更新：2026-11-16 · v0.9.0。运行时不依赖 MOSS。三种空间共用自部署识别服务；主对话的应用状态控制收听、停播和上下文续接。
 
-## 当前已落地
+## 当前可运行的默认路线
 
-- 浏览器独立录音和可打断播放，远端服务器自建 Whisper 转写；只向指定机器传输语音，不依赖第三方 ASR API。
-- 对话层可选择本机 / SSH 转发的 OpenAI-compatible 模型；服务地址只接受 HTTP 回环接口，不能从配置传入外网地址。故障时在已有 DeepSeek 配置的情况下回退；DeepSeek 继续提供会议及工作台的复杂多任务能力。
-- `localNanoSpeech` 可连接自部署 [MOSS-TTS-Nano ONNX app](https://github.com/OpenMOSS/MOSS-TTS-Nano)，走它的 `/api/generate`，验证返回的 WAV 并对外提供取消与长度限制。尚未在本机启用此模型，当前仍使用浏览器系统声音或已配置的云语音。
-- 会议的确认后任务最多两项并行，各自保留方案版本与结果，参考 [AutoGen 多 Agent 协作](https://github.com/microsoft/autogen)中的角色/消息/执行分工；本项目没有引入 AutoGen 依赖，也没有假称 Agent 可以控制外部系统。
-- 物理工作台以浏览器 Cannon 刚体场景为主；借鉴 [Isaac Lab](https://github.com/isaac-sim/IsaacLab)对仿真与机器人任务分层的思路。新轨迹求解器对每个轨迹点的**末端**做保守障碍盒检查；不覆盖机械臂各关节连杆、连续碰撞或真实硬件约束。服务器旧版忽略障碍输入时强制回退到本机新版，不静默跳过检查。
+麦克风 → Xim VAD → SSH 连接的 Whisper → DeepSeek → 情绪文字 / Three.js / 设备朗读。语音输入在输出期间保持开启。这是可插话的级联原型；整句识别和整段文本生成仍造成等待，不等于原生端到端全双工模型。
 
-## 模型接口与开关
+会议空间和物理工作台继续使用 DeepSeek 处理结构化任务，并使用既有固定计算服务。图片服务没有默认外部供应商；未部署时会返回 `IMAGE_NOT_CONFIGURED`，不自动把图片请求发给其他平台。
 
-在仓库忽略的 `private/local-models.json` 设置以下字段后重启 `server.mjs`。默认保留现有实时语音，以便不打断已验证的使用方式；要试自己的本地级联，明确选择 `voice_mode: local`：
+## 可替换的模型服务
+
+`private/local-models.json` 为本机私有配置，Git 忽略。以下为接口配置示例，不表示端口已有模型运行；未使用的字段应省略。
 
 ```json
 {
-  "voice_mode": "local",
   "chat_url": "http://127.0.0.1:18080",
-  "chat_model": "在本机服务中加载的模型名",
+  "chat_model": "实际加载的文本模型名",
   "tts_url": "http://127.0.0.1:18083",
-  "tts_demo_id": "demo-1"
+  "tts_model": "实际加载的语音模型名",
+  "tts_voice": "已授权的音色标识",
+  "image_url": "http://127.0.0.1:18084",
+  "image_model": "实际加载的图像模型名"
 }
 ```
 
-也可用 `.env.example` 中对应的 `XIM_` 环境变量。局域网或服务器服务须通过本机 SSH 端口转发；不要把无认证的推理服务开放给公网。`demo-1` 是上游演示音频条件，仅用于技术验证，不能直接当作已授权商用角色声音；产品声音须审查音频和人格权授权。自部署 Nano 的上游 ONNX 网页服务启动见 [官方说明](https://github.com/OpenMOSS/MOSS-TTS-Nano#onnx-local-web-demo-with-app_onnxpy)。该工作机的 Windows 应用控制曾阻止新安装的原生组件，推荐在允许依赖的独立 Linux 环境运行，不能通过关闭或规避该控制处理。
+- 文本：`POST /v1/chat/completions`，兼容 messages/choices 协议。先调用本地模型，失败时如配置 DeepSeek 则回退；会议与工作台仍使用 DeepSeek。
+- 声音：`POST /v1/audio/speech`，JSON 包含 `model,input,voice,response_format: wav`，返回原始 WAV，最大 4 MB。未配置或失败时采用设备朗读。它是通用协议，模型需要部署适配服务，不能直接指向任意原生服务。
+- 图片：`POST /v1/images/generations`，请求一张 768×768 图片，JSON `data[0].b64_json` 返回 PNG/JPEG；拒绝远程图片 URL、SVG 和过大响应。
+- 所有模型地址只允许 HTTP 回环，远端模型通过 SSH 转发。不向这些地址发送 DeepSeek 密钥。识别仍使用 `private/asr.json` 与 `/health`、`/transcribe`。
 
-Xim 的本地路线是语音检测 → 整句转写 → 文本对话 → 分段合成，能够中断播放；它不是原生同时收听与说话的端到端全双工模型。MOSS-Live 公开页面介绍了托管系统，但没有提供可直接替换的公开完整权重，不能凭借 TTS 微调宣称复现 Live。模型改结构需要额外训练与基准评估。
+环境变量见 [.env.example](../.env.example)。v0.8.1 的 `tts_demo_id` 与 Nano `/api/generate` 不再支持；旧 `private/moss.json` 和 `MOSS_*` 设置不再读取。原私有研究材料没有删除或上传。当前没有部署独立神经语音模型或图像模型，通用接口只通过模拟工作服务验证。
 
-## 已选公开数据与准备
+## 数据与训练
 
-[AISHELL-3](https://www.openslr.org/93) 数据页面标注 Apache 2.0，约 85 小时、218 名普通话说话人，为中性语音。其适合作为发音和多说话人基础数据，不能代替开心、安慰、插话等情绪和对话训练集。商业产品需要保留归属和许可证，并核验个人声音和具体使用方式的授权；不把现有说话人声音直接包装成已取得角色声音授权。
-
-已固定公开仓库修订 `e1c7e4f38ef3fdd1b35b44066b53eb05498f458d`，抓取三名说话人各 10 条作为**开发样本**。脚本生成 20 条训练、10 条未见说话人的留出样本；它只验证文本、WAV 格式和划分，不是有效训练量。数据和中间产物存于 `data/`，不进入 GitHub。
-
-```powershell
-python scripts/fetch_aishell3_sample.py --output data/aishell3-sample --per-speaker 10
-python scripts/prepare_aishell3.py --root data/aishell3-sample --output data/aishell3-sample-prepared --eval-speakers 1
-```
-
-完整 AISHELL-3 公开包约 19 GB。对完整包运行相同准备脚本后，训练集及评估集按说话人隔离，输出来源、原始标注摘要与数据量。公开 Nano [训练流程](https://github.com/OpenMOSS/MOSS-TTS-Nano/blob/main/finetuning/README.md)包括音频编码、SFT 和验证。已准备 `training/run_nano.sh`：只调用指定版本的上游训练脚本，拒绝不足 1000 条训练 / 100 条留出样本、说话人重叠和覆盖已有训练输出。它没有自动触发训练，也不从测试数据学习。
-
-运行训练前需要 Python 3.10+、匹配上游版本的依赖、原始模型及音频 tokenizer 权重，确保训练样本与验证集在训练机器上可读。服务器当前默认 Python 3.8、没有该模型依赖，已检测到，因此没有声称训练或权重改造完成。需要搭建隔离环境并完成预处理后才能启动 GPU SFT。
-
-## 训练后的验收
-
-保留原版权重和新 checkpoint，记录上游代码/模型 SHA、数据清单、超参数和计算资源。比较基线与微调版的中文内容错误、发音、主观自然度、不同说话人与文本的泛化、首音/整句延迟；情绪风格需使用额外授权样本及独立人工盲评。没有足够人类反馈时，不能把提示词策略更新当作模型权重自进化或宣传效果提升。
+公开数据选择与自主研发边界见 [模型路线](MODEL_STRATEGY.md)，样本准备和训练计划见 [training/README.md](../training/README.md)。完整模型训练前还需要隔离环境、权重、足够样本、预处理和独立评测；本版本没有训练产物。

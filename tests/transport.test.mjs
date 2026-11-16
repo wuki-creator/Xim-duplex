@@ -26,6 +26,7 @@ test('voice transport authenticates and preserves successive speech until the us
   const bad=net.connect(port,'127.0.0.1');bad.on('error',()=>{});bad.write('GET /api/voice HTTP/1.1\r\nHost: 127.0.0.1:'+port+'\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nOrigin: broken\r\n\r\n');await once(bad,'close');
   assert.equal((await fetch(base+'/api/bootstrap')).status,200);
   const denied=new WebSocket(base.replace('http','ws')+'/api/voice',{origin:base});sockets.push(denied);await once(denied,'open');denied.send('{"token":"wrong"}');assert.equal((await once(denied,'close'))[0],1008);
+  const retired=new WebSocket(base.replace('http','ws')+'/api/voice',{origin:base});sockets.push(retired);await once(retired,'open');retired.send(JSON.stringify({token:boot.token,mode:'live'}));assert.equal((await once(retired,'close'))[0],1008,'old provider sessions require a refresh, never reconnect upstream');
   const ws=new WebSocket(base.replace('http','ws')+'/api/voice',{origin:base});sockets.push(ws);const events=[];ws.on('message',b=>events.push(JSON.parse(b)));await once(ws,'open');ws.send(JSON.stringify({token:boot.token}));
   while(!events.some(e=>e.type==='ready'))await sleep(10);
   const loud=Buffer.alloc(1600);for(let i=0;i<800;i++)loud.writeInt16LE(6000,i*2);const quiet=Buffer.alloc(1600);

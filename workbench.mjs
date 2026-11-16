@@ -1,5 +1,6 @@
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {loopbackUrl} from './local-models.mjs';
 
 const workScript=fileURLToPath(new URL('./scripts/compute_world.py',import.meta.url));
 const actions=new Set(['talk','add','move','paint','pick','place','release','physics','trajectory','download','image']);
@@ -48,12 +49,20 @@ export async function interpretWorkbench({key,model,input,context,signal,request
   return checkAction(x,objects);
 }
 
-export async function generateWorkbenchImage({key,prompt,signal,request=fetch}){
-  const result=await request('https://api.mosi.cn/v1/images/generations',{method:'POST',redirect:'error',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({model:'moss-image-base-1.0',prompt,n:1,size:'768x768',response_format:'url',prompt_enhance:false}),signal});
-  if(!result.ok){await result.body?.cancel();throw Error(result.status===402?'IMAGE_BALANCE':result.status===403?'IMAGE_FORBIDDEN':'IMAGE_UNAVAILABLE');}
-  const value=await result.json(),url=new URL(value.data?.[0]?.url);
-  if(url.protocol!=='https:'||url.username||url.password)throw Error('IMAGE_UNAVAILABLE');
-  return {url:url.href};
+export async function generateWorkbenchImage({url,model,prompt,signal,request=fetch}){
+  const result=await request(loopbackUrl(url,'/v1/images/generations'),{method:'POST',redirect:'error',headers:{'Content-Type':'application/json'},body:JSON.stringify({model,prompt,n:1,size:'768x768',response_format:'b64_json'}),signal});
+  if(!result.ok){await result.body?.cancel();throw Error('IMAGE_UNAVAILABLE');}
+  const max=12000000;
+  if(Number(result.headers.get('content-length'))>max){await result.body?.cancel();throw Error('IMAGE_UNAVAILABLE');}
+  let size=0;const chunks=[];
+  for await(const chunk of result.body){size+=chunk.length;if(size>max)throw Error('IMAGE_UNAVAILABLE');chunks.push(chunk);}
+  const encoded=JSON.parse(Buffer.concat(chunks).toString('utf8')).data?.[0]?.b64_json;
+  if(typeof encoded!=='string'||!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded))throw Error('IMAGE_UNAVAILABLE');
+  const bytes=Buffer.from(encoded,'base64');
+  const png=bytes.length>24&&bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
+  const jpeg=bytes.length>4&&bytes[0]===255&&bytes[1]===216&&bytes[2]===255;
+  if(!png&&!jpeg)throw Error('IMAGE_UNAVAILABLE');
+  return {url:`data:image/${png?'png':'jpeg'};base64,${bytes.toString('base64')}`};
 }
 
 export async function computeWorld(input,{remote='',signal}={}){

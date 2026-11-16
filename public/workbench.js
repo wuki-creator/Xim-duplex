@@ -1,7 +1,7 @@
 import {World,palette} from './world.js';
 const $=id=>document.getElementById(id),coords=['px','py','pz'].map($),history=[];
 const labels={box:'方块',sphere:'球体',cylinder:'圆柱'};
-const errors={PATH_BLOCKED:'机械臂末端的直线路径经过其他物体，请移动障碍物或换一个目标。',UNREACHABLE:'目标超出虚拟机械臂的活动范围，或直线经过底座附近。请把目标移近一些。',MODEL_UNAVAILABLE:'暂时连不上 DeepSeek，请再试一次。',MODEL_NOT_CONFIGURED:'请先配置 DeepSeek 连接。',COMPUTE_UNAVAILABLE:'暂时无法完成计算。',IMAGE_NOT_CONFIGURED:'图片服务尚未配置。',IMAGE_BALANCE:'模思账号的图片余额不足。',IMAGE_FORBIDDEN:'当前账号没有生图权限，或请求未通过平台审核。',IMAGE_UNAVAILABLE:'暂时无法生成图片，请稍后重试。',BUSY:'上一项操作还在继续，请稍等。'};
+const errors={PATH_BLOCKED:'机械臂末端的直线路径经过其他物体，请移动障碍物或换一个目标。',UNREACHABLE:'目标超出虚拟机械臂的活动范围，或直线经过底座附近。请把目标移近一些。',MODEL_UNAVAILABLE:'暂时连不上 DeepSeek，请再试一次。',MODEL_NOT_CONFIGURED:'请先配置 DeepSeek 连接。',COMPUTE_UNAVAILABLE:'暂时无法完成计算。',IMAGE_NOT_CONFIGURED:'图片服务尚未配置。',IMAGE_BALANCE:'图片服务资源不足。',IMAGE_FORBIDDEN:'当前账号没有生图权限，或请求未通过平台审核。',IMAGE_UNAVAILABLE:'暂时无法生成图片，请稍后重试。',BUSY:'上一项操作还在继续，请稍等。'};
 let world,boot,report,imagePrompt,planning,armPending=false,generating=false,voice=false;
 
 try{world=new World($('viewport'),refresh);}catch(error){$('worldError').hidden=false;console.error(error.name);}
@@ -159,7 +159,7 @@ $('imageConfirm').onclick=async()=>{
   try{
     const {url}=await post('image',{prompt,confirmed:true});
     const img=new Image();img.src=url;img.alt=prompt;img.referrerPolicy='no-referrer';
-    const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='打开原图';
+    const link=document.createElement('a');link.href=url;link.download=url.startsWith('data:image/jpeg;')?'xim-image.jpg':'xim-image.png';link.textContent='下载图片';
     $('imageResult').replaceChildren(img,link);$('resultLabel').textContent='图片已生成';log('图片已经生成，在作品区可以看。','assistant',true);
   }catch(e){$('resultLabel').textContent='图片暂未生成';failure(e);}finally{generating=false;}
 };

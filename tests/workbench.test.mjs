@@ -38,13 +38,13 @@ test('world solver estimates clean free fall and refuses non-loopback worker URL
   await assert.rejects(computeWorld(input,{signal,remote:'https://example.test/'}),{message:'COMPUTE_CONFIGURATION'});
 });
 
-test('image generation sends one fixed-size image request and rejects unsafe response schemes',async()=>{
- const input={key:'mock',prompt:'日落时分的青绿色实验台'};
+test('image generation sends one fixed-size image request and accepts only embedded raster bytes',async()=>{
+ const input={url:'http://127.0.0.1:18084',model:'local-image',prompt:'日落时分的青绿色实验台'};
  const output=await generateWorkbenchImage({...input,request:async(url,options)=>{
-   assert.equal(url,'https://api.mosi.cn/v1/images/generations');assert.equal(options.redirect,'error');
-   const payload=JSON.parse(options.body);assert.equal(payload.n,1);assert.equal(payload.size,'768x768');assert.equal(payload.prompt_enhance,false);
-   return Response.json({data:[{url:'https://cdn.example.test/a.png'}]});
+   assert.equal(url,'http://127.0.0.1:18084/v1/images/generations');assert.equal(options.redirect,'error');
+   const payload=JSON.parse(options.body);assert.equal(payload.n,1);assert.equal(payload.size,'768x768');assert.equal(payload.response_format,'b64_json');assert.equal(options.headers.Authorization,undefined);
+   return Response.json({data:[{b64_json:Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),Buffer.alloc(32)]).toString('base64')}]});
  }});
- assert.equal(output.url,'https://cdn.example.test/a.png');
+ assert.match(output.url,/^data:image\/png;base64,/);
  await assert.rejects(generateWorkbenchImage({...input,request:async()=>Response.json({data:[{url:'javascript:alert(1)'}]})}));
 });

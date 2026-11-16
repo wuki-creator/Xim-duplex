@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
-import {pcmWav} from '../moss-models.mjs';
+import {pcmWav} from '../audio.mjs';
 
 test('AISHELL preparation isolates speakers and handles official wav filenames and pinyin',async t=>{
   const root=await fs.mkdtemp(path.join(os.tmpdir(),'xim-speech-'));t.after(()=>fs.rm(root,{recursive:true,force:true}));

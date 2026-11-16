@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {loopbackUrl,localChat,localNanoSpeech} from '../local-models.mjs';
-import {pcmWav} from '../moss-models.mjs';
+import {loopbackUrl,localChat,localSpeech} from '../local-models.mjs';
+import {pcmWav} from '../audio.mjs';
 
 test('local inference only allows loopback and does not send remote API keys',async()=>{
   for(const address of ['https://localhost:1','http://example.org','http://127.0.0.1.evil.test','http://u:p@127.0.0.1'])assert.throws(()=>loopbackUrl(address,'/v1/chat/completions'));
@@ -12,12 +12,12 @@ test('local inference only allows loopback and does not send remote API keys',as
   }});
   assert.deepEqual(reply,{segments:[{text:'明白，是家里的事。',emotion:'warm'}],task:null});
 });
-test('local Nano integration accepts only bounded WAV bytes from local worker',async()=>{
+test('local speech contract accepts only bounded WAV bytes from local worker',async()=>{
   const wav=pcmWav(Buffer.alloc(16));
-  const result=await localNanoSpeech({url:'http://localhost:18083',text:'你好',demoId:'sample',request:async(url,opts)=>{
-    assert.equal(url,'http://localhost:18083/api/generate');assert.equal(opts.body.get('text'),'你好');assert.equal(opts.body.get('demo_id'),'sample');
-    return Response.json({audio_base64:wav.toString('base64')});
+  const result=await localSpeech({url:'http://localhost:18083',text:'你好',model:'test-tts',voice:'sample',request:async(url,opts)=>{
+    assert.equal(url,'http://localhost:18083/v1/audio/speech');assert.deepEqual(JSON.parse(opts.body),{model:'test-tts',input:'你好',voice:'sample',response_format:'wav'});assert.equal(opts.headers.Authorization,undefined);
+    return new Response(wav,{headers:{'Content-Type':'audio/wav'}});
   }});
   assert.deepEqual(result,wav);
-  await assert.rejects(localNanoSpeech({url:'http://localhost:18083',text:'你好',request:async()=>Response.json({audio_base64:Buffer.from('wrong').toString('base64')})}));
+  await assert.rejects(localSpeech({url:'http://localhost:18083',text:'你好',request:async()=>new Response('wrong')}));
 });
