@@ -1,8 +1,22 @@
 # Xim Duplex 当前模型与对话流程
 
-更新时间：2026-11-16 · 代码版本：v0.7.1
+更新时间：2026-11-16 · 代码版本：v0.8.0
 
 [模思模型路由](MOSI_INTEGRATION.md)已用真实 API 验证两轮合成对话。下方的基础链路使用 Whisper + DeepSeek + 设备朗读；实时会话还可在未及时收到回复音频时保留原话并切换回基础链路。
+
+工作台与会议空间各自使用基础转写和 DeepSeek，和主对话舱的 MOSS-Live 会话分开。详细操作与验证边界见 [使用指南](WORKBENCH_AND_MEETING.md)。
+
+```mermaid
+flowchart LR
+    TALK[语音或文字] --> ROUTE[DeepSeek 识别意图]
+    ROUTE --> LAB[物理工作台：建物体、下载、虚拟机械臂]
+    LAB --> COMPUTE[固定计算：服务器或本机]
+    LAB --> IMAGE[用户确认后调用模思生图]
+    ROUTE --> ROOM[会议空间：具名角色与任务]
+    ROOM --> PLAN[讨论及方案版本]
+    PLAN --> CONFIRM{用户明确确认}
+    CONFIRM --> RESULT[完成文字交付物或获准计算]
+```
 
 **状态：可插话的级联原型。Windows 听写在真人测试中失败后，已切换为经 SSH 连接的 Whisper Small；三条合成语音与静音检查通过，用户已确认能识别真实讲话。复杂重叠对话仍待验证。** 下图描述当前这台机器配置的实际链路；目标架构单独列出。
 

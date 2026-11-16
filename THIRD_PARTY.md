@@ -3,6 +3,7 @@
 | 组件 | 使用方式 | 来源与许可 |
 | --- | --- | --- |
 | Three.js 0.187.0 | 浏览器三维机器人，随仓库分发 | https://github.com/mrdoob/three.js ，MIT；保留 `public/vendor/three-LICENSE.txt` |
+| Cannon ES 0.20.0 | 浏览器物理工作台的刚体模拟 | https://github.com/pmndrs/cannon-es ，MIT；通过 npm 安装 |
 | ws 8.23.0 | Node WebSocket | https://github.com/websockets/ws ，MIT；通过 npm 安装 |
 | faster-whisper | 语音识别服务；当前旧 Python 服务器使用 1.0.3 / CTranslate2 4.4.0，本机依赖清单为 1.2.1 | https://github.com/SYSTRAN/faster-whisper ，MIT；独立安装 |
 | Whisper Small / CTranslate2 模型 | 当前服务器识别权重，单独下载，不随仓库分发 | https://huggingface.co/Systran/faster-whisper-small ，按模型卡与上游许可使用；兼容 tiny 配置 |

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>伴点 · 物理工作台</title><link rel="stylesheet" href="/workbench.css">
+</head>
+<body>
+<header class="studio-header"><a href="/">‹ 返回对话舱</a><span>XIM / 伴点</span><a href="/meeting.html" class="header-state">会议空间 ↗</a></header>
+<main class="studio">
+  <header class="studio-title"><div><p class="eyebrow">VIRTUAL WORKSHOP</p><h1>物理工作台</h1></div><p>搭一个小世界。让伴点听懂你的指令，<br>和你一起摆放、抓取和试验。</p></header>
+  <div class="layout">
+    <section class="lab" aria-label="虚拟物理实验场">
+      <div class="panel-title"><div><span class="disc" aria-hidden="true"></span><h2>实验场</h2></div><button id="physicsToggle" type="button" aria-pressed="false">▶ 开始模拟</button></div>
+      <div id="viewport" class="viewport"><div class="view-tag" aria-hidden="true">PERSPECTIVE<br><b>Y</b>↑ <b>X</b>↘ <b>Z</b>↙</div><p id="worldError" role="status" hidden>无法启动 3D 场景。请开启浏览器硬件加速后刷新。</p></div>
+      <div class="view-note"><span>拖动旋转 · 滚动缩放 · 点击选物体</span><span>重力 9.81 m/s²</span></div>
+      <div class="tools"><button data-add="box" type="button">＋ 方块</button><button data-add="sphere" type="button">＋ 球</button><button data-add="cylinder" type="button">＋ 圆柱</button><button id="pathCompute" type="button">计算轨迹</button><button id="physicsCompute" type="button">计算下落</button></div>
+    </section>
+    <aside class="side" aria-label="场景操作和对话">
+      <section class="inspector">
+        <div class="panel-title"><div><span class="disc copper" aria-hidden="true"></span><h2>物体</h2></div><span id="objectCount" class="chip">0 件</span></div>
+        <div id="objectList" class="object-list" aria-label="场景物体"></div>
+        <form id="positionForm" class="position"><strong>位置</strong><label>X<input type="number" id="px" step="0.1" min="-10" max="10" required></label><label>Y<input type="number" id="py" step="0.1" min="0" max="10" required></label><label>Z<input type="number" id="pz" step="0.1" min="-10" max="10" required></label><button type="submit">移动</button></form>
+        <div class="tools arm-tools"><button id="grasp" type="button">抓取选中</button><button id="place" type="button">放到坐标</button><button id="release" type="button">松开</button><button id="removeObject" type="button" class="quiet">移除物体</button></div>
+      </section>
+      <section class="talk" aria-labelledby="talkTitle">
+        <div class="panel-title"><div><span class="disc" aria-hidden="true"></span><h2 id="talkTitle">和伴点说</h2></div><button id="voiceStart" type="button" data-mode="cascade" aria-pressed="false">开始语音</button></div>
+        <p id="voiceStatus" class="voice-status" role="status">试试「添加一个红色方块」</p>
+        <div id="activity" class="activity" role="log" aria-label="工作台对话" tabindex="0"><p>你可以叫我移动物体，也可以一起聊聊想做什么。</p></div>
+        <form id="command" class="command"><label class="visually-hidden" for="commandText">给伴点的指令</label><input id="commandText" maxlength="1000" placeholder="说说你想做什么…" required><button id="commandSend" type="submit">发送 ↑</button></form>
+      </section>
+    </aside>
+  </div>
+  <section class="results" aria-labelledby="resultsTitle"><div class="panel-title"><div><span class="disc copper" aria-hidden="true"></span><h2 id="resultsTitle">作品与结果</h2></div></div>
+    <div class="tools"><button data-download="scene" type="button">下载场景 JSON</button><button data-download="gltf" type="button">下载 Blender 导入文件</button><button data-download="blender" type="button">下载 Blender 脚本</button><button data-download="report" type="button">下载计算结果</button></div>
+    <p id="resultLabel" role="status">运行一次计算后，结果会出现在这里。</p><div id="resultData"></div><div id="imageResult"></div>
+  </section>
+</main>
+<dialog id="imageDialog"><h2>生成一张图片</h2><p id="imagePrompt"></p><p>图片由模思生成，按当前账户规则计费。确认后开始。</p><div class="tools"><button id="imageCancel" type="button">取消</button><button id="imageConfirm" type="button">确认生成</button></div></dialog>
+<script type="module" src="/workbench.js"></script><script type="module" src="/voice-client.js"></script>
+</body></html>

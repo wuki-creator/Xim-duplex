@@ -11,6 +11,8 @@ import {emotions} from './policy.mjs';
 import {VadSegmenter} from './voice-policy.mjs';
 import {connectLive} from './moss-live.mjs';
 import {nexModel,asrModels,transcribeMoss,synthesizeMoss} from './moss-models.mjs';
+import {interpretWorkbench,computeWorld,generateWorkbenchImage} from './workbench.mjs';
+import {MeetingService,MeetingError} from './meeting.mjs';
 const root=path.dirname(fileURLToPath(import.meta.url)),port=Number(process.env.PORT||8788);
 let privateConfig={};
 try {privateConfig=JSON.parse(await fs.readFile(process.env.XIM_CONFIG||path.join(os.homedir(),'AppData/Local/BandiPrivate/config.json'),'utf8'));}catch{}
@@ -28,6 +30,11 @@ const cloudAsr=Boolean(mossKey&&asrModels.has(mossASR));
 const mossVoice=process.env.MOSS_TTS_VOICE_ID||mossConfig.tts_voice_id;
 const liveAvailable=Boolean(mossKey&&(process.env.MOSS_LIVE||mossConfig.live)!==false&&process.env.MOSS_LIVE!=='0');
 const liveVoice=process.env.MOSS_LIVE_VOICE_ID||mossConfig.live_voice_id;
+let workbenchConfig={};
+try{workbenchConfig=JSON.parse(await fs.readFile(path.join(root,'private/workbench.json'),'utf8'));}catch{}
+const computeRemote=process.env.XIM_COMPUTE_URL||workbenchConfig.compute_url||'';
+let workbenchBusy=0,imageBusy=false;
+const meeting=new MeetingService({key,model,remote:computeRemote});
 const token=crypto.randomBytes(32).toString('hex'),replies=new Map(),rate=[];
 const ttsRate=[];let inflight=0,ttsInflight=0;
 const allowed=new Set(['127.0.0.1:'+port,'localhost:'+port]);
@@ -41,12 +48,47 @@ const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://localhost');
   if(req.method==='GET'&&url.pathname==='/api/bootstrap'){
     const asr=await fetch(asrURL+'/health',{signal:AbortSignal.timeout(1000)}).then(r=>r.json()).catch(()=>({ready:false}));
-    return send(res,200,{token,configured:Boolean(key||mossChat),model:mossChat?nexModel:model,emotions,asrReady:asr.ready===true||cloudAsr,asrModel:cloudAsr?mossASR:asr.model||null,voiceLive:liveAvailable,cloudAsr,cloudTts:Boolean(mossKey&&mossVoice),version:'0.7.1',policy:styles.id});
+    return send(res,200,{token,configured:Boolean(key||mossChat),model:mossChat?nexModel:model,emotions,asrReady:asr.ready===true||cloudAsr,asrModel:cloudAsr?mossASR:asr.model||null,voiceLive:liveAvailable,cloudAsr,cloudTts:Boolean(mossKey&&mossVoice),version:'0.8.0',policy:styles.id});
   }
   if(url.pathname.startsWith('/api/')){
     if(req.method!=='POST'||req.headers['x-bandi-token']!==token||!String(req.headers['content-type']).startsWith('application/json')||
        (req.headers.origin&&!trustedOrigin(req.headers.origin)))return send(res,403,{error:'ACCESS_DENIED'});
     const b=await body(req);
+    if(url.pathname.startsWith('/api/meeting/')){
+      if(!b||typeof b!=='object')return send(res,400,{error:'INVALID_INPUT'});
+      const controller=new AbortController();res.on('close',()=>controller.abort());
+      const signal=AbortSignal.any([controller.signal,AbortSignal.timeout(120000)]);
+      try{
+        if(url.pathname==='/api/meeting/create')return send(res,200,meeting.create());
+        if(url.pathname==='/api/meeting/input')return send(res,200,await meeting.input(b.id,b.text,b.selected,signal));
+        if(url.pathname==='/api/meeting/approve')return send(res,200,await meeting.approve(b.id,b.task,b.rev,signal));
+        return send(res,404,{error:'NOT_FOUND'});
+      }catch(e){return send(res,e instanceof MeetingError?e.status:502,{error:e instanceof MeetingError?e.code:'MEETING_UNAVAILABLE',message:e instanceof MeetingError?e.message:'暂时无法处理这场会议。'});}
+    }
+    if(url.pathname==='/api/workbench/intent'){
+      if(!key)return send(res,503,{error:'MODEL_NOT_CONFIGURED'});
+      if(typeof b.input!=='string'||!b.input.trim()||b.input.length>1000)return send(res,400,{error:'INVALID_INPUT'});
+      if(workbenchBusy>=3)return send(res,429,{error:'BUSY'});
+      workbenchBusy++;const controller=new AbortController();res.on('close',()=>controller.abort());
+      try{return send(res,200,await interpretWorkbench({key,model,input:b.input,context:b.context,signal:AbortSignal.any([controller.signal,AbortSignal.timeout(20000)])}));}
+      catch{return send(res,502,{error:'MODEL_UNAVAILABLE'});}finally{workbenchBusy--;}
+    }
+    if(url.pathname==='/api/workbench/compute'){
+      if(workbenchBusy>=3)return send(res,429,{error:'BUSY'});
+      workbenchBusy++;const controller=new AbortController();res.on('close',()=>controller.abort());
+      try{
+        const result=await computeWorld(b,{remote:computeRemote,signal:AbortSignal.any([controller.signal,AbortSignal.timeout(9000)])});
+        return send(res,result.error?400:200,result);
+      }catch{return send(res,502,{error:'COMPUTE_UNAVAILABLE'});}finally{workbenchBusy--;}
+    }
+    if(url.pathname==='/api/workbench/image'){
+      if(!mossKey)return send(res,503,{error:'IMAGE_NOT_CONFIGURED'});
+      if(b.confirmed!==true||typeof b.prompt!=='string'||!b.prompt.trim()||b.prompt.length>700)return send(res,400,{error:'INVALID_INPUT'});
+      if(imageBusy)return send(res,429,{error:'BUSY'});
+      imageBusy=true;const controller=new AbortController();res.on('close',()=>controller.abort());
+      try{return send(res,200,await generateWorkbenchImage({key:mossKey,prompt:b.prompt,signal:AbortSignal.any([controller.signal,AbortSignal.timeout(180000)])}));}
+      catch(e){return send(res,502,{error:['IMAGE_BALANCE','IMAGE_FORBIDDEN'].includes(e.message)?e.message:'IMAGE_UNAVAILABLE'});}finally{imageBusy=false;}
+    }
     if(url.pathname==='/api/chat'){
       if(typeof b.text!=='string'||!b.text.trim()||b.text.length>2000)return send(res,400,{error:'INVALID_INPUT'});
       if(!key&&!mossChat)return send(res,503,{error:'MODEL_NOT_CONFIGURED'});
@@ -94,12 +136,13 @@ const server=http.createServer(async(req,res)=>{
     }
     return send(res,404,{error:'NOT_FOUND'});
   }
-  const assets=new Set(['index.html','app.js','dialogue-state.js','room.css','style.css','robot3d.js','voice-client.js','live-player.js','live-turns.js','capture-worklet.js','vendor/three.module.js','vendor/three.core.js','media/xim-demo.mp4','media/poster.png']);
+  const assets=new Set(['index.html','app.js','dialogue-state.js','room.css','style.css','robot3d.js','voice-client.js','live-player.js','live-turns.js','capture-worklet.js','workbench.html','workbench.css','workbench.js','world.js','meeting.html','meeting.css','meeting-ui.js','vendor/cannon-es.js','vendor/three.module.js','vendor/three.core.js','media/xim-demo.mp4','media/poster.png']);
   const name=url.pathname==='/'?'index.html':url.pathname.slice(1);
   if(!assets.has(name)||!['GET','HEAD'].includes(req.method))return send(res,404,{error:'NOT_FOUND'});
-  const bytes=await fs.readFile(path.join(root,'public',name));
+  const bytes=await fs.readFile(name==='vendor/cannon-es.js'?path.join(root,'node_modules/cannon-es/dist/cannon-es.js'):path.join(root,'public',name));
   const mime={'.html':'text/html; charset=utf-8','.css':'text/css','.js':'application/javascript','.mp4':'video/mp4','.png':'image/png'}[path.extname(name)];
-  const headers={'Content-Type':mime,'Cache-Control':'no-cache','Content-Length':bytes.length,'X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; media-src 'self' blob:; img-src 'self' data:; frame-ancestors 'none'"};
+  const images=name==='workbench.html'?' https:':'';
+  const headers={'Content-Type':mime,'Cache-Control':'no-cache','Content-Length':bytes.length,'X-Content-Type-Options':'nosniff','Content-Security-Policy':`default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; media-src 'self' blob:; img-src 'self' data:${images}; frame-ancestors 'none'`};
   if(mime==='video/mp4'){
     headers['Accept-Ranges']='bytes';
     if(req.headers.range&&req.method==='GET'){

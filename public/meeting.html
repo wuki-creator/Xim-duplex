@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>伴点 · 会议空间</title><link rel="stylesheet" href="/workbench.css"><link rel="stylesheet" href="/meeting.css"></head>
+<body><header class="studio-header"><a href="/">‹ 返回对话舱</a><span>XIM / 伴点</span><a href="/workbench.html" class="header-state">物理工作台 ↗</a></header>
+<main class="studio meeting-studio">
+  <header class="studio-title"><div><p class="eyebrow">VIRTUAL MEETING</p><h1>会议空间</h1></div><p>围坐讨论，点名派活。<br>每份方案都在你确认后执行。</p></header>
+  <div class="meeting-layout">
+    <section class="lab" aria-labelledby="roomTitle">
+      <div class="panel-title"><div><span class="disc copper" aria-hidden="true"></span><h2 id="roomTitle">会议桌</h2></div><span class="chip" id="seatCount">0 位虚拟参会者</span></div>
+      <div id="meetingTable" class="round-room"><div class="table-top" aria-hidden="true"></div><div class="table-caption"><small>议题</small><strong id="meetingTopic">未命名会议</strong></div><div id="seats" class="seats" aria-label="参会席位"></div></div>
+      <form class="organize" id="organize"><label>参会人数<input id="members" type="number" min="1" max="8" step="1" value="3" required></label><label class="topic-field">会议主题<input maxlength="80" id="topicText" placeholder="例如：桌面机器人演示方案"></label><button id="organizeButton" type="submit">安排席位</button></form>
+    </section>
+    <section class="talk" aria-labelledby="meetingTalk"><div class="panel-title"><div><span class="disc" aria-hidden="true"></span><h2 id="meetingTalk">会议对话</h2></div><button id="voiceStart" type="button" data-mode="cascade" aria-pressed="false">开始语音</button></div>
+      <p id="voiceStatus" class="voice-status" role="status">试试「组织三个人开会」</p>
+      <p id="agentFocus" class="voice-status">面向全体 · 点名或选择席位</p>
+      <div id="conversation" class="activity meeting-conversation" role="log" aria-label="会议对话记录" tabindex="0"></div>
+      <p id="meetingStatus" class="meeting-status" role="status"></p>
+      <form id="meetingCommand" class="command"><label for="meetingText" class="visually-hidden">会议指令</label><input id="meetingText" maxlength="1000" required placeholder="点名派活，或说「请大家讨论」…"><button id="meetingSend" type="submit">发送 ↑</button></form>
+    </section>
+  </div>
+  <section class="results task-section" aria-labelledby="tasksTitle"><div class="panel-title"><div><span class="disc copper" aria-hidden="true"></span><h2 id="tasksTitle">任务与待确认方案</h2></div><span id="taskCount" class="chip">0 项</span></div><div id="tasks" class="task-grid"></div></section>
+  <section class="results task-section" aria-labelledby="deliverablesTitle"><div class="panel-title"><div><span class="disc" aria-hidden="true"></span><h2 id="deliverablesTitle">结果区</h2></div><span id="resultCount" class="chip">0 份成果</span></div><div id="meetingResults" class="task-grid"></div></section>
+</main>
+<script type="module" src="/meeting-ui.js"></script><script type="module" src="/voice-client.js"></script></body></html>

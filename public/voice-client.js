@@ -1,9 +1,14 @@
 import {LivePlayer} from './live-player.js';
 import {LiveTurns} from './live-turns.js';
 const button=document.querySelector('#voiceStart'),status=document.querySelector('#voiceStatus');
-const continueTurn=document.querySelector('#continueTurn'),liveTurns=new LiveTurns();
-const options=document.querySelector('#voiceOptions'),modeSelect=document.querySelector('#voiceMode'),privacy=document.querySelector('#voicePrivacy');
-const diagnostics=document.querySelector('#voiceDiagnostics'),meter=document.querySelector('#micLevel'),hint=document.querySelector('#micHint'),devices=document.querySelector('#microphone'),finish=document.querySelector('#finishSpeech'),sensitivity=document.querySelector('#sensitivity'),transcript=document.querySelector('#lastTranscript');
+const el=(id,tag)=>document.getElementById(id)||document.createElement(tag);
+const compact=button.dataset.mode==='live';
+const continueTurn=el('continueTurn','button'),liveTurns=new LiveTurns();
+const options=el('voiceOptions','label'),modeSelect=el('voiceMode','select'),privacy=el('voicePrivacy','p');
+const diagnostics=el('voiceDiagnostics','div'),meter=el('micLevel','meter'),hint=el('micHint','p'),devices=el('microphone','select'),finish=el('finishSpeech','button'),sensitivity=el('sensitivity','select'),transcript=el('lastTranscript','p');
+const sensitivityLabel=sensitivity.closest('label')||document.createElement('label');
+const threshold=()=>Number(sensitivity.value)||.012;
+const buttonLabel=text=>{(compact?button.querySelector('strong'):button).textContent=text;};
 let socket,stream,context,node,source,gain,player,route='cascade',active=false,pending=false,generation=0;
 let watcher,lastPacket=0,lastSound=0,startedAt=0,speechAt=0,packets=0;
 let liveWatch,handoff,voiceBoot;
@@ -18,8 +23,8 @@ function voiceOptions(boot){
 window.addEventListener('xim:bootstrap',e=>voiceOptions(e.detail));
 if(window.ximChat?.voiceSettings)voiceOptions(window.ximChat.voiceSettings);
 function setupCascade(){
-  finish.hidden=false;sensitivity.closest('label').hidden=false;
-  control({type:'sensitivity',threshold:Number(sensitivity.value)});
+  finish.hidden=false;sensitivityLabel.hidden=false;
+  control({type:'sensitivity',threshold:threshold()});
 }
 function assist(automatic=false){
   if(route!=='live'||!active||!voiceBoot?.configured||handoff||player?.playing)return;
@@ -46,7 +51,7 @@ function trackLiveWait(){
   }
 }
 finish.onclick=()=>{control({type:'speech.finish'});finish.disabled=true;};
-sensitivity.onchange=()=>control({type:'sensitivity',threshold:Number(sensitivity.value)});
+sensitivity.onchange=()=>control({type:'sensitivity',threshold:threshold()});
 devices.onchange=()=>{if(active||pending){stop('正在切换麦克风…');button.click();}};
 async function listDevices(){
   const selected=devices.value;
@@ -67,13 +72,14 @@ function stop(text='语音已结束'){
   socket?.close();socket=null;
   window.speechSynthesis?.cancel();
   window.dispatchEvent(new Event('xim:voice-closed'));
-  button.textContent='开始语音';button.disabled=false;
+  buttonLabel(compact?'实时语音':'开始语音');button.disabled=false;delete button.dataset.connecting;
+  if(compact&&!['语音已结束','已开始新对话，语音已关闭。','已结束实时语音，继续文字对话。'].includes(text))window.ximChat?.note(text);
   status.textContent=text;button.setAttribute('aria-pressed','false');
 }
 window.ximVoice={get active(){return active},get live(){return (active||pending)&&route==='live'},stop,mute:muted=>player?.mute(muted)};
 button.onclick=async()=>{
   if(active||pending){stop();return;}
-  pending=true;route=modeSelect.value;modeSelect.disabled=true;const ticket=++generation;button.textContent='取消连接';status.textContent='正在连接语音服务…';
+  pending=true;route=button.dataset.mode||modeSelect.value||'cascade';modeSelect.disabled=true;const ticket=++generation;buttonLabel(compact?'连接中…':'取消连接');button.dataset.connecting='';status.textContent='正在连接语音服务…';window.ximChat?.note('');
   try{
     const boot=await fetch('/api/bootstrap').then(r=>r.json());if(ticket!==generation)return;
     voiceBoot=boot;
@@ -83,7 +89,7 @@ button.onclick=async()=>{
     const media=await navigator.mediaDevices.getUserMedia({audio:{...(devices.value?{deviceId:{exact:devices.value}}:{}),channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
     if(ticket!==generation){media.getTracks().forEach(t=>t.stop());return;}
     stream=media;
-    diagnostics.hidden=false;await listDevices().catch(()=>{});
+    diagnostics.hidden=false;if(!compact)await listDevices().catch(()=>{});
     if(ticket!==generation)return;
     context=new AudioContext();
     await context.audioWorklet.addModule('/capture-worklet.js');
@@ -106,7 +112,7 @@ button.onclick=async()=>{
         clearTimeout(timeout);pending=false;active=true;
         startedAt=lastPacket=lastSound=Date.now();packets=0;
         const live=msg.mode==='live';
-        finish.hidden=live;sensitivity.closest('label').hidden=live;
+        finish.hidden=live;sensitivityLabel.hidden=live;
         transcript.textContent='';
         if(live){
           liveTurns.clear();liveWatch=setInterval(trackLiveWait,250);
@@ -122,7 +128,7 @@ button.onclick=async()=>{
           const pcm=new Int16Array(e.data);let power=0;
           for(const v of pcm)power+=(v/32768)**2;
           const rms=Math.sqrt(power/(pcm.length||1));lastPacket=Date.now();packets++;
-          if(rms>=Number(sensitivity.value))lastSound=lastPacket;
+          if(rms>=threshold())lastSound=lastPacket;
           if(packets%4===0)meter.value=Math.min(1,rms*10);
           if(socket?.readyState===1){
             if(socket.bufferedAmount>32000){stop('网络拥塞，请重新连接语音。');return;}
@@ -130,7 +136,7 @@ button.onclick=async()=>{
           }
         };
         source.connect(node);node.connect(gain);gain.connect(context.destination);
-        button.textContent='结束语音';button.setAttribute('aria-pressed','true');
+        buttonLabel(compact?'实时语音':'结束语音');delete button.dataset.connecting;button.setAttribute('aria-pressed','true');
         status.textContent=live?'实时语音已开启 · 可以自然接话':'麦克风已开启 · 可以随时插话，建议佩戴耳机';
         hint.textContent='当前麦克风：'+(stream.getTracks()[0].label||'系统默认')+(live?'。建议佩戴耳机。':'。说完后停顿，或点击“这句说完了”。');
         watcher=setInterval(()=>{

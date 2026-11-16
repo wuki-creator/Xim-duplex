@@ -1,12 +1,14 @@
 # Xim Duplex · 伴点
 
-一个只保留对话的桌面陪伴机器人原型。Three.js 表情、情绪文字与沉浸式对话舱，搭配独立搭建的持续收听、插话停播和上下文回答链路。
+一个桌面陪伴机器人原型。Three.js 表情、情绪文字和沉浸式对话舱支持持续收听、插话停播与上下文回答。独立的物理工作台和会议空间可用语音操作。
 
 ![Xim Duplex](public/media/poster.png)
 
 [观看 ChatCut 演示成片](public/media/xim-demo.mp4) · [验证记录](docs/VALIDATION.md)
 
 **[查看当前模型流程图与打断续接时序 →](docs/MODEL_FLOW.md)** · [原生全双工改造方案](docs/DUPLEX_ARCHITECTURE.md)
+
+**v0.8.0**：[物理工作台与会议空间指南](docs/WORKBENCH_AND_MEETING.md)。可在主页面顶部进入；主对话语音区只保留「实时语音」开关。工作台支持语音建模、虚拟机械臂、计算和导出；会议空间支持具名 Agent、讨论、方案确认和交付。
 
 v0.7.1 改善实时语音接话：将回答前的连续转写合成一轮；确认听懂后若实时模式迟迟未开口，可「接着回答」，也会在符合条件时自动由基础语音接续。MOSS-Live、Nex、模思转写和角色语音可单独启用，见 [模思接入指南](docs/MOSI_INTEGRATION.md)。
 
