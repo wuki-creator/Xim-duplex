@@ -4,6 +4,9 @@ $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.Speech
 $engine=New-Object System.Speech.Recognition.SpeechRecognitionEngine([Globalization.CultureInfo]'zh-CN')
 $engine.LoadGrammar((New-Object System.Speech.Recognition.DictationGrammar))
+$engine.InitialSilenceTimeout=[TimeSpan]::FromSeconds(3)
+$engine.EndSilenceTimeout=[TimeSpan]::FromMilliseconds(400)
+$engine.EndSilenceTimeoutAmbiguous=[TimeSpan]::FromMilliseconds(700)
 [Console]::WriteLine('{"ready":true}')
 try {
  while($null -ne ($inputLine=[Console]::In.ReadLine())) {
@@ -19,7 +22,8 @@ try {
    $engine.SetInputToWaveStream($memory)
    $result=$engine.Recognize([TimeSpan]::FromSeconds(12))
    $text=if($null -ne $result -and $result.Confidence -ge 0.2){$result.Text}else{''}
-   [Console]::WriteLine((@{text=$text}|ConvertTo-Json -Compress))
+   $reason=if($null -eq $result){'no_match'}elseif($result.Confidence -lt 0.2){'low_confidence'}else{$null}
+   [Console]::WriteLine((@{text=$text;reason=$reason}|ConvertTo-Json -Compress))
   } catch { [Console]::WriteLine('{"error":"recognition_failed"}') }
   finally { $engine.SetInputToNull();if($writer){$writer.Dispose()};if($memory){$memory.Dispose()} }
  }

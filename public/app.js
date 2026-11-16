@@ -1,3 +1,5 @@
+import {DialogueState,speechChunks} from './dialogue-state.js';
+const dialogue=new DialogueState();
 const $ = id => document.getElementById(id);
 const messages = $('messages'), input = $('input'), pet = $('pet');
 const starters = [...document.querySelectorAll('[data-prompt]')];
@@ -17,7 +19,32 @@ const messagesForErrors = {
   ACCESS_DENIED:'连接已更新。请刷新页面后再发一次。',
   INVALID_INPUT:'请输入 1 到 2000 字的消息。',
 };
-let boot, history = [], active = null, retryable = null, voice = false;
+let boot, active = null, retryable = null, voice = false, playback=null, playbackEpoch=0;
+
+function cancelPlayback(reason='user_speech'){
+  playbackEpoch++;
+  if(playback){
+    dialogue.interrupt(playback.node,reason);
+    playback.label.textContent='伴点 · 已暂停朗读';
+    playback=null;
+  }
+  window.speechSynthesis?.cancel();
+}
+function speak(node,answer){
+  const epoch=++playbackEpoch,chunks=speechChunks(node.reply);
+  playback={node,label:answer.querySelector('small')};
+  const next=index=>{
+    if(epoch!==playbackEpoch)return;
+    const chunk=chunks[index];
+    if(!chunk){playback=null;return;}
+    const utterance=new SpeechSynthesisUtterance(chunk.text);utterance.lang='zh-CN';utterance.rate=.96;
+    utterance.onboundary=event=>{if(epoch===playbackEpoch)dialogue.acknowledge(node,chunk.start+event.charIndex);};
+    utterance.onend=()=>{if(epoch===playbackEpoch){dialogue.acknowledge(node,chunk.end);next(index+1);}};
+    utterance.onerror=()=>{if(epoch===playbackEpoch){cancelPlayback('playback_error');note('朗读中断，文字回复已保留。');}};
+    window.speechSynthesis.speak(utterance);
+  };
+  next(0);
+}
 
 const note = (text='') => { $('error').textContent = text; };
 const subtitle = text => { $('subtitle').textContent = text; };
@@ -96,10 +123,10 @@ function failed(turn,label,mayRetry=true) {
 }
 function stop(mark=false) {
   if(active) {
-    const turn=active; active=null; turn.controller.abort(); turn.pending.remove();
+    const turn=active; active=null;dialogue.interrupt(turn.node); turn.controller.abort(); turn.pending.remove();
     if(mark) failed(turn,'已停止');
   }
-  window.speechSynthesis?.cancel();
+  cancelPlayback();
   busy(false);
 }
 function renderReply(reply) {
@@ -134,27 +161,26 @@ async function run(turn) {
   dismissRetry();
   turn.status?.remove();
   const {text}=turn;
-  note(); window.speechSynthesis?.cancel();
+  note();cancelPlayback('new_message');
+  turn.node??=dialogue.begin(text);
+  turn.node.status='generating';
   const pending=card('assistant pending','伴点','正在回应');
   const controller=new AbortController();
   turn.controller=controller; turn.pending=pending; active=turn;
   append(pending,true);
   busy(true);
   try {
-    const reply=await post('chat',{text,history,style:'warm'},controller.signal);
+    const reply=await post('chat',{...dialogue.request(turn.node),style:'warm'},controller.signal);
     if(active!==turn || controller.signal.aborted) return;
     const follow=nearBottom();
     const answer=renderReply(reply);
     pending.replaceWith(answer);
     if(follow) jump();else updateJump();
     const replyText=reply.segments.map(s=>s.text).join('\n');
-    history.push({role:'user',content:text},{role:'assistant',content:replyText});
-    history=history.slice(-10);
+    const spoken=Boolean(voice&&window.speechSynthesis);
+    dialogue.complete(turn.node,replyText,spoken);
     if(input.value.trim()===text) input.value='';
-    if(voice&&window.speechSynthesis) {
-      const u=new SpeechSynthesisUtterance(replyText);u.lang='zh-CN';u.rate=.96;
-      window.speechSynthesis.speak(u);
-    }
+    if(spoken)speak(turn.node,answer);
   } catch(e) {
     if(active!==turn || controller.signal.aborted) return;
     pending.remove();
@@ -185,7 +211,7 @@ for(const b of starters) b.onclick=()=>{ if(!active){input.value=b.dataset.promp
 $('stop').onclick=()=>{stop(true);note('已停止本轮回复。');};
 $('mute').onclick=()=>{
   voice=!voice;$('mute').textContent=voice?'声音开启':'声音关闭';
-  $('mute').setAttribute('aria-pressed',String(voice));if(!voice)window.speechSynthesis?.cancel();
+  $('mute').setAttribute('aria-pressed',String(voice));if(!voice)cancelPlayback('muted');
 };
 for(const b of moods) b.onclick=()=>mood(b.dataset.mood);
 pet.onclick=()=>{mood('joy');$('touch').textContent='收到摸摸头，伴点也跟你打招呼。';};
@@ -193,7 +219,7 @@ $('color').onchange=()=>document.body.classList.toggle('no-color',!$('color').ch
 $('motion').onchange=()=>document.body.classList.toggle('no-motion',!$('motion').checked);
 $('clear').onclick=()=>{
   window.ximVoice?.stop('已开始新对话，语音已关闭。');
-  stop();dismissRetry();history=[];input.value='';
+  stop();dismissRetry();dialogue.clear();input.value='';
   lastSubtitle='我们从这里重新开始吧。';subtitle(lastSubtitle);
   messages.replaceChildren(card('assistant','伴点',lastSubtitle));mood('warm');
   note('对话已清空。');
@@ -213,6 +239,7 @@ document.querySelector('#filmOpen').onclick=()=>filmDialog.showModal();
 document.querySelector('#filmClose').onclick=()=>filmDialog.close();
 filmDialog.addEventListener('close',()=>filmDialog.querySelector('video').pause());
 filmDialog.addEventListener('cancel',()=>filmDialog.querySelector('video').pause());
-window.addEventListener('xim:speech-start',()=>{if(active||window.speechSynthesis?.speaking)stop(true);});
+window.addEventListener('xim:speech-start',()=>{if(active||playback)stop(true);});
+window.addEventListener('xim:voice-closed',()=>cancelPlayback('voice_closed'));
 window.addEventListener('xim:transcript',e=>{if(e.detail.trim())send(e.detail.trim());});
 window.addEventListener('xim:voice-ready',()=>{voice=true;$('mute').textContent='声音开启';$('mute').setAttribute('aria-pressed','true');});

@@ -23,6 +23,6 @@ class WindowsASR:
             self.process.stdin.write(base64.b64encode(raw).decode('ascii')+'\n');self.process.stdin.flush()
             result=json.loads(self.messages.get(timeout=16))
             if 'error' in result:raise RuntimeError(result['error'])
-            return result['text']
+            return {"text":result['text'],"reason":result.get('reason')}
         except Exception:
             self.process.terminate();raise

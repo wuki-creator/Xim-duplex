@@ -6,6 +6,23 @@
 
 [观看 ChatCut 演示成片](public/media/xim-demo.mp4) · [验证记录](docs/VALIDATION.md)
 
+**[查看当前模型流程图与打断续接时序 →](docs/MODEL_FLOW.md)** · [原生全双工改造方案](docs/DUPLEX_ARCHITECTURE.md)
+
+v0.6.1 新增播放位置确认、打断后的对话分支、麦克风音量/设备选择和手动断句。最新真人反馈仍是“收到声音但未能识别”；Windows 听写尚未通过真实麦克风验收，不能宣称完整全双工已经可用。
+
+```mermaid
+flowchart LR
+    MIC[持续收音] --> VAD[能量 VAD]
+    VAD --> ASR[Windows 整句听写]
+    ASR --> STATE[对话事件树]
+    TEXT[文字输入] --> STATE
+    STATE --> LLM[DeepSeek]
+    LLM --> UI[情绪文字 / Three.js]
+    LLM --> TTS[短段系统朗读]
+    TTS -->|播放确认| STATE
+    VAD -->|插话停播| TTS
+```
+
 ## 当前能力
 
 - DeepSeek 服务端调用，结构化输出异常时回退为可读文字；停止与重试不会追加重复的用户消息。

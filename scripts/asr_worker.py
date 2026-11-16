@@ -29,12 +29,13 @@ class Handler(BaseHTTPRequestHandler):
             raw=self.rfile.read(length)
             if len(raw)!=length: return self.send(400,{"error":"incomplete_pcm"})
             if engine=="windows":
-                text=native.transcribe(raw)
+                result=native.transcribe(raw)
             else:
                 audio=np.frombuffer(raw,dtype="<i2").astype(np.float32)/32768
                 segments,_=model.transcribe(audio,language="zh",beam_size=3,condition_on_previous_text=False,vad_filter=False)
                 text="".join(s.text for s in segments if s.no_speech_prob<0.6).strip()
-            self.send(200,{"text":text})
+                result={"text":text,"reason":None if text else "no_match"}
+            self.send(200,result)
         except Exception: self.send(503,{"error":"transcription_failed"})
         finally: lock.release()
 ThreadingHTTPServer(("127.0.0.1",8791),Handler).serve_forever()

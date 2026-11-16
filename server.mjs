@@ -28,7 +28,7 @@ const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://localhost');
   if(req.method==='GET'&&url.pathname==='/api/bootstrap'){
     const asr=await fetch(asrURL+'/health',{signal:AbortSignal.timeout(1000)}).then(r=>r.json()).catch(()=>({ready:false}));
-    return send(res,200,{token,configured:Boolean(key),model,emotions,asrReady:asr.ready===true,asrModel:asr.model||null,version:'0.6.0',policy:styles.id});
+    return send(res,200,{token,configured:Boolean(key),model,emotions,asrReady:asr.ready===true,asrModel:asr.model||null,version:'0.6.1',policy:styles.id});
   }
   if(url.pathname.startsWith('/api/')){
     if(req.method!=='POST'||req.headers['x-bandi-token']!==token||!String(req.headers['content-type']).startsWith('application/json')||
@@ -44,7 +44,7 @@ const server=http.createServer(async(req,res)=>{
       res.on('close',()=>{if(!res.writableEnded)controller.abort();});
       try{
         const history=Array.isArray(b.history)?b.history.slice(-10).filter(m=>m&&['user','assistant'].includes(m.role)&&typeof m.content==='string'&&m.content.length<=2000):[];
-        const result=await getModelReply({key,model,text:b.text,history,style:'warm',signal:controller.signal,policy:styles.instruction});
+        const result=await getModelReply({key,model,text:b.text,history,interruption:b.interruption,style:'warm',signal:controller.signal,policy:styles.instruction});
         const id=crypto.randomUUID();replies.set(id,{prompt:b.text,segments:result.segments,at:Date.now(),policy:styles.id});
         while(replies.size>100)replies.delete(replies.keys().next().value);
         return send(res,200,{id,segments:result.segments,model});
@@ -60,7 +60,7 @@ const server=http.createServer(async(req,res)=>{
     }
     return send(res,404,{error:'NOT_FOUND'});
   }
-  const assets=new Set(['index.html','app.js','room.css','style.css','robot3d.js','voice-client.js','capture-worklet.js','vendor/three.module.js','vendor/three.core.js','media/xim-demo.mp4','media/poster.png']);
+  const assets=new Set(['index.html','app.js','dialogue-state.js','room.css','style.css','robot3d.js','voice-client.js','capture-worklet.js','vendor/three.module.js','vendor/three.core.js','media/xim-demo.mp4','media/poster.png']);
   const name=url.pathname==='/'?'index.html':url.pathname.slice(1);
   if(!assets.has(name)||!['GET','HEAD'].includes(req.method))return send(res,404,{error:'NOT_FOUND'});
   const bytes=await fs.readFile(path.join(root,'public',name));
@@ -88,6 +88,7 @@ wss.on('connection',ws=>{
   const output=data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));};
   const vad=new VadSegmenter({onStart:()=>{seq++;current?.abort();output({type:'speech.start',seq});},onEnd:async pcm=>{
     const my=seq;current?.abort();const controller=new AbortController();current=controller;
+    output({type:'speech.end',seq:my,durationMs:Math.round(pcm.length/32)});
     let timedOut=false;const timer=setTimeout(()=>{timedOut=true;controller.abort();},20000);
     try{
       let response;
@@ -97,7 +98,7 @@ wss.on('connection',ws=>{
       } while(response.status===429);
       if(!response.ok)throw Error('asr');
       const result=await response.json();
-      if(!closed&&my===seq)output({type:'transcript',text:typeof result.text==='string'?result.text.slice(0,2000):'',seq});
+      if(!closed&&my===seq)output({type:'transcript',text:typeof result.text==='string'?result.text.slice(0,2000):'',reason:['no_match','low_confidence'].includes(result.reason)?result.reason:null,seq});
     }catch{if(!closed&&my===seq&&(!controller.signal.aborted||timedOut))output({type:'error',message:timedOut?'语音识别超时，请重试或使用文字对话。':'语音识别暂不可用，请使用文字对话。'});}
     finally{clearTimeout(timer);}
   }});
@@ -109,7 +110,15 @@ wss.on('connection',ws=>{
       return;
     }
     last=Date.now();
-    if(!binary||data.length%2||data.length>6400)return ws.close(1008,'Invalid PCM');
+    if(!binary){
+      try{
+        const message=JSON.parse(data);
+        if(message.type==='speech.finish'){if(!vad.finish())output({type:'no_speech'});return;}
+        if(message.type==='sensitivity'&&Number.isFinite(message.threshold)&&message.threshold>=.004&&message.threshold<=.04){vad.threshold=message.threshold;return;}
+      }catch{}
+      return ws.close(1008,'Invalid control');
+    }
+    if(data.length%2||data.length>6400)return ws.close(1008,'Invalid PCM');
     if(ws.bufferedAmount>128000)return ws.close(1013,'Slow connection');
     vad.push(data);
   });

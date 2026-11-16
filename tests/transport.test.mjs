@@ -35,5 +35,12 @@ test('voice transport authenticates, survives malformed origins, and drops super
   assert.equal(events.filter(e=>e.type==='speech.start').length,2);
   assert.deepEqual(events.filter(e=>e.type==='transcript').map(e=>e.text),['新的话']);
   assert.ok(retries>0,'waits for the superseded ASR request without ending microphone capture');
+  assert.equal(events.filter(e=>e.type==='speech.end').length,2);
+  ws.send(JSON.stringify({type:'sensitivity',threshold:.006}));
+  for(let i=0;i<8;i++)ws.send(loud);
+  ws.send(JSON.stringify({type:'speech.finish'}));
+  for(let i=0;i<100&&events.filter(e=>e.type==='transcript').length<2;i++)await sleep(20);
+  assert.equal(events.filter(e=>e.type==='transcript').length,2);
+  assert.equal(events.filter(e=>e.type==='speech.end').length,3);
   ws.send(Buffer.alloc(3));assert.equal((await once(ws,'close'))[0],1008);
 });

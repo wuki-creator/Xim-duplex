@@ -61,6 +61,14 @@
           <button type="button" id="jumpLatest" hidden>回到最新消息 ↓</button>
         </div>
         <div class="conversation-dock"><div class="voice-tools"><button id="voiceStart" type="button">开始语音</button><span id="voiceStatus" role="status">文字与语音，随你选择</span></div>
+          <div id="voiceDiagnostics" class="voice-diagnostics" hidden>
+            <label>麦克风 <select id="microphone"><option value="">系统默认</option></select></label>
+            <label>音量 <meter id="micLevel" min="0" max="1" value="0" aria-label="麦克风输入音量"></meter></label>
+            <label>收音灵敏度 <select id="sensitivity"><option value="0.012">标准</option><option value="0.006">轻声</option><option value="0.025">嘈杂环境</option></select></label>
+            <button id="finishSpeech" type="button" disabled>这句说完了</button>
+            <p id="micHint">请在连接完成后讲话；音量条应随声音变化。</p>
+            <p id="lastTranscript" aria-live="polite"></p>
+          </div>
           <div class="suggestions" aria-label="对话建议">
             <button type="button" data-prompt="我今天终于完成了一件拖延很久的事">分享小开心</button>
             <button type="button" data-prompt="我有点累，先别给建议，陪我聊两句">陪我缓一缓</button>
@@ -81,9 +89,9 @@
     </section>
   </main>
   <section class="film-section"><button id="filmOpen" type="button">观看 Xim 概念演示 ↗</button><dialog id="filmDialog"><button id="filmClose" type="button" aria-label="关闭演示">关闭</button><h2>Xim Duplex</h2><p>交互概念演示 · 非性能实测</p><video controls preload="metadata" playsinline poster="/media/poster.png"><source src="/media/xim-demo.mp4" type="video/mp4"></video></dialog></section>
-  <footer class="room-footer"><span>伴点 · 个人陪伴空间</span><span>v0.6</span></footer>
+  <footer class="room-footer"><span>伴点 · 个人陪伴空间</span><span>v0.6.1</span></footer>
 
-  <script src="/app.js"></script>
+  <script type="module" src="/app.js"></script>
   <script type="module" src="/robot3d.js"></script>
   <script type="module" src="/voice-client.js"></script>
 </body>

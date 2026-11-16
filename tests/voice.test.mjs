@@ -20,3 +20,12 @@ test('self-improvement refuses missing, duplicated and synthetic evidence',()=>{
  assert.equal(gate(Array.from({length:50},(_,i)=>({...r,case_id:String(i),source:'synthetic'}))).pass,false);
  assert.equal(gate(Array.from({length:50},(_,i)=>({...r,case_id:String(i)}))).pass,true);
 });
+test('quiet speech is detected and manual endpoint releases continuous background sound',()=>{
+ let starts=0,ends=[];
+ const v=new VadSegmenter({onStart:()=>starts++,onEnd:b=>ends.push(b)});
+ assert.equal(v.finish(),false);
+ for(let i=0;i<8;i++)v.push(frame(.02));
+ assert.equal(starts,1);assert.equal(ends.length,0);
+ assert.equal(v.finish(),true);assert.equal(ends.length,1);assert.equal(v.finish(),false);
+ for(let i=0;i<8;i++)v.push(frame(.02));assert.equal(starts,2);
+});
