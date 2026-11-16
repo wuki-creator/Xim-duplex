@@ -1,16 +1,16 @@
 # Xim Duplex 当前模型与对话流程
 
-更新时间：2026-11-16 · 代码版本：v0.9.0
+更新时间：2026-11-16 · 代码版本：v0.9.1
 
-现行产品不调用或微调 MOSS。默认链路是 Xim 收音与打断管理 → 自部署 Whisper → DeepSeek → 设备朗读；三种空间统一使用自己的语音入口。
+现行产品不调用或微调 MOSS。默认链路是 Xim 收音与打断管理 → 自部署 Whisper → 自托管语言模型 → 设备朗读；三种空间统一使用自己的语音入口。
 
-工作台与会议空间使用 DeepSeek 处理结构化任务，由 Xim 检查方案、确认和执行状态。详细操作与验证边界见 [使用指南](WORKBENCH_AND_MEETING.md)。
+工作台与会议空间使用自托管语言模型处理结构化任务，由 Xim 检查方案、确认和执行状态。详细操作与验证边界见 [使用指南](WORKBENCH_AND_MEETING.md)。
 
 主对话可配置独立文本和声音服务，图像生成改为自部署服务接口；见[部署说明](SELF_HOSTED_ROADMAP.md)。这些通用接口已经实现，神经语音和图像模型尚未部署。自主研发与训练边界见[技术路线](MODEL_STRATEGY.md)。
 
 ```mermaid
 flowchart LR
-    TALK[语音或文字] --> ROUTE[DeepSeek 识别意图]
+    TALK[语音或文字] --> ROUTE[本地模型识别意图]
     ROUTE --> LAB[物理工作台：建物体、下载、虚拟机械臂]
     LAB --> COMPUTE[固定计算：服务器或本机]
     LAB --> IMAGE[用户确认后请求自部署图像服务<br/>未配置时提示不可用]
@@ -39,7 +39,7 @@ flowchart TD
     ASR -->|最终文字| TURN[对话事件树<br/>用户意图、父节点、打断状态]
     TEXT --> TURN
     TURN --> CTX[构建上下文<br/>已播放前缀 + 新输入 + 打断信息]
-    CTX --> LLM[可替换本地文本模型 / DeepSeek API<br/>当前默认 DeepSeek 整段文本生成]
+    CTX --> LLM[本地文本模型<br/>整段文本生成]
     LLM --> JSON[解析情绪段落<br/>结构异常时重试纯文字]
     JSON --> UI[对话气泡与情绪文字色]
     JSON --> PET[Three.js 角色表情]
@@ -66,7 +66,7 @@ sequenceDiagram
     participant U as 用户
     participant V as 语音输入 / VAD
     participant D as 对话状态
-    participant L as DeepSeek
+    participant L as 自托管语言模型
     participant P as 播放队列
     U->>D: 最近很烦
     D->>L: 用户原话与历史
@@ -83,7 +83,7 @@ sequenceDiagram
     Note over D,P: 旧播放回调失效；未播出的内容不追加进语音历史
 ```
 
-这是应用层的对话事件树。我们不能通过 DeepSeek API 插入或编辑模型内部 CoT。播放确认也是浏览器事件估计，不能精确证明用户听到了哪一个音素。当前能量 VAD 仍无法区分“嗯嗯”等附和与真正打断。
+这是应用层的对话事件树。不能将用户对话插入模型内部隐藏推理。播放确认也是浏览器事件估计，不能精确证明用户听到了哪一个音素。当前能量 VAD 仍无法区分“嗯嗯”等附和与真正打断。
 
 ## 3. 当前递归改进范围
 

@@ -1,22 +1,16 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import crypto from 'node:crypto';
 import {setTimeout as pause} from 'node:timers/promises';
 import {fileURLToPath} from 'node:url';
 import {WebSocketServer} from 'ws';
-import {getModelReply,ReplyError} from './model-reply.mjs';
 import {emotions} from './policy.mjs';
 import {VadSegmenter} from './voice-policy.mjs';
 import {interpretWorkbench,computeWorld,generateWorkbenchImage} from './workbench.mjs';
 import {MeetingService,MeetingError} from './meeting.mjs';
 import {localChat,localSpeech,loopbackUrl} from './local-models.mjs';
 const root=path.dirname(fileURLToPath(import.meta.url)),port=Number(process.env.PORT||8788);
-let privateConfig={};
-try {privateConfig=JSON.parse(await fs.readFile(process.env.XIM_CONFIG||path.join(os.homedir(),'AppData/Local/BandiPrivate/config.json'),'utf8'));}catch{}
-const key=process.env.DEEPSEEK_API_KEY||privateConfig.api_key;
-const model=process.env.DEEPSEEK_MODEL||'deepseek-flash';
 let asrConfig={};
 try {asrConfig=JSON.parse(await fs.readFile(path.join(root,'private/asr.json'),'utf8'));}catch{}
 const asrURL=process.env.ASR_URL||asrConfig.url||'http://127.0.0.1:8791';
@@ -33,7 +27,7 @@ const localImageUrl=process.env.XIM_LOCAL_IMAGE_URL||localConfig.image_url||'';
 const localImageModel=process.env.XIM_LOCAL_IMAGE_MODEL||localConfig.image_model||'';
 for(const url of [asrURL,localChatUrl,localTtsUrl,localImageUrl].filter(Boolean))loopbackUrl(url,'/');
 let workbenchBusy=0,imageBusy=false;
-const meeting=new MeetingService({key,model,remote:computeRemote});
+const meeting=new MeetingService({url:localChatUrl,model:localChatModel,remote:computeRemote});
 const token=crypto.randomBytes(32).toString('hex'),replies=new Map(),rate=[];
 const ttsRate=[];let inflight=0,ttsInflight=0;
 const allowed=new Set(['127.0.0.1:'+port,'localhost:'+port]);
@@ -47,7 +41,8 @@ const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://localhost');
   if(req.method==='GET'&&url.pathname==='/api/bootstrap'){
     const asr=await fetch(asrURL+'/health',{signal:AbortSignal.timeout(1000)}).then(r=>r.json()).catch(()=>({ready:false}));
-    return send(res,200,{token,configured:Boolean(key||(localChatUrl&&localChatModel)),model:localChatUrl?localChatModel:model,emotions,asrReady:asr.ready===true,asrModel:asr.model||null,voiceLive:false,voiceMode:'cascade',voiceEngine:'xim-cascade',cloudAsr:false,serverTts:Boolean(localTtsUrl&&localTtsModel),imageReady:Boolean(localImageUrl&&localImageModel),version:'0.9.0',policy:styles.id});
+    const chat=localChatUrl?await fetch(loopbackUrl(localChatUrl,'/health'),{signal:AbortSignal.timeout(1000)}).then(r=>r.json()).catch(()=>({ready:false})):{};
+    return send(res,200,{token,configured:Boolean(localChatUrl&&localChatModel&&chat.ready===true),model:localChatModel||null,emotions,asrReady:asr.ready===true,asrModel:asr.model||null,voiceLive:false,voiceMode:'cascade',voiceEngine:'xim-cascade',cloudAsr:false,serverTts:Boolean(localTtsUrl&&localTtsModel),imageReady:Boolean(localImageUrl&&localImageModel),version:'0.9.1',policy:styles.id});
   }
   if(url.pathname.startsWith('/api/')){
     if(req.method!=='POST'||req.headers['x-bandi-token']!==token||!String(req.headers['content-type']).startsWith('application/json')||
@@ -65,11 +60,11 @@ const server=http.createServer(async(req,res)=>{
       }catch(e){return send(res,e instanceof MeetingError?e.status:502,{error:e instanceof MeetingError?e.code:'MEETING_UNAVAILABLE',message:e instanceof MeetingError?e.message:'暂时无法处理这场会议。'});}
     }
     if(url.pathname==='/api/workbench/intent'){
-      if(!key)return send(res,503,{error:'MODEL_NOT_CONFIGURED'});
+      if(!localChatUrl||!localChatModel)return send(res,503,{error:'MODEL_NOT_CONFIGURED'});
       if(typeof b.input!=='string'||!b.input.trim()||b.input.length>1000)return send(res,400,{error:'INVALID_INPUT'});
       if(workbenchBusy>=3)return send(res,429,{error:'BUSY'});
       workbenchBusy++;const controller=new AbortController();res.on('close',()=>controller.abort());
-      try{return send(res,200,await interpretWorkbench({key,model,input:b.input,context:b.context,signal:AbortSignal.any([controller.signal,AbortSignal.timeout(20000)])}));}
+      try{return send(res,200,await interpretWorkbench({url:localChatUrl,model:localChatModel,input:b.input,context:b.context,signal:AbortSignal.any([controller.signal,AbortSignal.timeout(60000)])}));}
       catch{return send(res,502,{error:'MODEL_UNAVAILABLE'});}finally{workbenchBusy--;}
     }
     if(url.pathname==='/api/workbench/compute'){
@@ -90,7 +85,7 @@ const server=http.createServer(async(req,res)=>{
     }
     if(url.pathname==='/api/chat'){
       if(typeof b.text!=='string'||!b.text.trim()||b.text.length>2000)return send(res,400,{error:'INVALID_INPUT'});
-      if(!key&&!(localChatUrl&&localChatModel))return send(res,503,{error:'MODEL_NOT_CONFIGURED'});
+      if(!localChatUrl||!localChatModel)return send(res,503,{error:'MODEL_NOT_CONFIGURED'});
       const now=Date.now();while(rate.length&&rate[0]<now-60000)rate.shift();
       if(inflight>=2||rate.length>=20)return send(res,429,{error:'TOO_MANY_REQUESTS'});
       rate.push(now);inflight++;
@@ -98,17 +93,11 @@ const server=http.createServer(async(req,res)=>{
       res.on('close',()=>{if(!res.writableEnded)controller.abort();});
       try{
         const history=Array.isArray(b.history)?b.history.slice(-10).filter(m=>m&&['user','assistant'].includes(m.role)&&typeof m.content==='string'&&m.content.length<=2000):[];
-        const params={text:b.text,history,interruption:b.interruption,style:'warm',signal:controller.signal,policy:styles.instruction};
-        let result,usedModel=model;
-        if(localChatUrl&&localChatModel){
-          try{result=await localChat({url:localChatUrl,model:localChatModel,text:b.text,history,interruption:b.interruption,signal:AbortSignal.any([controller.signal,AbortSignal.timeout(12000)])});usedModel=localChatModel;}
-          catch(error){if(!key||controller.signal.aborted)throw error;}
-        }
-        result??=await getModelReply({...params,key,model});
+        const result=await localChat({url:localChatUrl,model:localChatModel,text:b.text,history,interruption:b.interruption,signal:controller.signal});
         const id=crypto.randomUUID();replies.set(id,{prompt:b.text,segments:result.segments,at:Date.now(),policy:styles.id});
         while(replies.size>100)replies.delete(replies.keys().next().value);
-        return send(res,200,{id,segments:result.segments,model:usedModel});
-      }catch(e){return send(res,e instanceof ReplyError?e.status:502,{error:e.code||'MODEL_UNAVAILABLE'});}
+        return send(res,200,{id,segments:result.segments,model:localChatModel});
+      }catch{return send(res,502,{error:'MODEL_UNAVAILABLE'});}
       finally{clearTimeout(timeout);inflight--;}
     }
     if(url.pathname==='/api/speech'){

@@ -1,5 +1,6 @@
 import {randomUUID,randomInt} from 'node:crypto';
 import {computeWorld} from './workbench.mjs';
+import {loopbackUrl} from './local-models.mjs';
 
 const names=['小鹿','阿晨','林舟','夏禾','苏墨','江雨','安可','叶青','方圆','云川','宁安','晓月'];
 const roles=['方案设计','工程实现','资料分析','体验设计','风险验证','任务协调','结果评估','质量复核'];
@@ -21,17 +22,21 @@ export function explicitApproval(text){
   const target=match[1].trim().replace(/的(?:方案|任务)$/u,'').trim();return {target,all:/^(?:全部|所有|all)$/i.test(target)};
 }
 
-async function modelJSON({key,model,system,context,signal,request,maxTokens=1200}){
-  const response=await request('https://api.deepseek.com/chat/completions',{method:'POST',redirect:'error',signal,headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({model,thinking:{type:'disabled'},response_format:{type:'json_object'},max_tokens:maxTokens,messages:[{role:'system',content:system},{role:'user',content:JSON.stringify(context)}]})});
+async function modelJSON({url,model,system,context,signal,request,maxTokens=1200}){
+  const response=await request(loopbackUrl(url,'/v1/chat/completions'),{method:'POST',redirect:'error',signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({model,response_format:{type:'json_object'},max_tokens:maxTokens,messages:[{role:'system',content:system},{role:'user',content:JSON.stringify(context)}]})});
   if(!response.ok){await response.body?.cancel();throw Error('Model unavailable');}
-  const value=await response.json();return JSON.parse(value.choices[0].message.content);
+  const value=await response.json();
+  const choice=value.choices?.[0],content=choice?.message?.content;
+  if(choice?.finish_reason!=='stop'||typeof content!=='string')throw Error('Model output incomplete');
+  const fenced=content.trim().match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return JSON.parse(fenced?.[1]??content);
 }
 
 const router=`你是伴点虚拟会议室的指令路由器。只输出一个 JSON 对象。action可为 organize、assign、revise、ask、discuss、talk。绝对不能输出执行或批准。组织会议提供 count（1–8的整数）和 topic；派活提供 agent（现有 participant.id）和 task；修改用 revise，并给 task 指令；用户补充当前任务的追问信息时也用 revise。ask 是向某个 agent 询问，discuss 是让多名 Agent 讨论，不执行任务。agent 只能从参与者选择，用户提供近音名字时对照现有姓名；没有明确的人且未选中时请澄清，不自行分配。topic 和 task 都只用用户的内容，不猜测。一般聊天用 {"action":"talk","reply":"..."}。没有明确的人数，提示可说“组织3个人开会”。未确认不开始执行，只能提方案或讨论。`;
 const baseRules='你是虚拟会议参与者。按给出的名字、职责、任务和对话回应。只使用提供的事实，不声称已外部搜索、已安排日历或已操作他人系统。只输出 JSON，字段和值使用要求的结构。';
 
 export class MeetingService{
-  constructor({key,model,remote='',request=fetch,compute=computeWorld}){Object.assign(this,{key,model,remote,request,compute});this.rooms=new Map();}
+  constructor({url,model,remote='',request=fetch,compute=computeWorld}){Object.assign(this,{url,model,remote,request,compute});this.rooms=new Map();}
   get(id){const room=this.rooms.get(id);if(!room)invalid('MEETING_EXPIRED','这场会议已结束，请重新创建。',404);room.touched=Date.now();return room;}
   create(){
     for(const [id,room] of this.rooms)if(!room.busy&&Date.now()-room.touched>7200000)this.rooms.delete(id);
@@ -57,7 +62,7 @@ export class MeetingService{
     if(topic)room.topic=cut(topic,80);
     this.note(room,'moderator',`现在有 ${count} 位参会者：${room.participants.map(x=>x.name).join('、')}。你可以点名派活。`);
   }
-  async ask(system,context,signal,maxTokens){if(!this.key)invalid('MODEL_NOT_CONFIGURED','DeepSeek 未配置。',503);return modelJSON({...this,key:this.key,model:this.model,request:this.request,system,context,signal,maxTokens});}
+  async ask(system,context,signal,maxTokens){if(!this.url||!this.model)invalid('MODEL_NOT_CONFIGURED','本地对话模型未配置。',503);return modelJSON({...this,system,context,signal,maxTokens});}
   context(room){return {topic:room.topic,participants:room.participants,tasks:room.tasks.slice(-8).map(({id,agent,task,status,plan})=>({id,agent,task,status,plan})),history:room.messages.slice(-12)};}
   async input(id,text,selected,signal){
     const room=this.get(id);if(room.busy)invalid('MEETING_BUSY','上一项正在进行，请稍等。',409);

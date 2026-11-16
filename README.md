@@ -8,9 +8,9 @@
 
 **[查看当前模型流程图与打断续接时序 →](docs/MODEL_FLOW.md)** · [原生全双工改造方案](docs/DUPLEX_ARCHITECTURE.md)
 
-**v0.9.0：独立产品路线。** 已移除 MOSS API、模型适配和 Nano 训练入口。主对话、[会议空间与物理工作台](docs/WORKBENCH_AND_MEETING.md)共用 Xim 的收音链路；默认语音为服务器 Whisper + DeepSeek + 设备朗读。文本、声音与图像可通过通用接口替换成自部署服务，参见[部署说明](docs/SELF_HOSTED_ROADMAP.md)。
+**v0.9.1：自托管产品路线。** 已移除 MOSS API、模型适配和 Nano 训练入口。主对话、[会议空间与物理工作台](docs/WORKBENCH_AND_MEETING.md)共用 Xim 的收音链路；默认语音为服务器 Whisper + 自托管语言模型 + 设备朗读。文本、声音与图像可通过通用接口替换成自部署服务，参见[部署说明](docs/SELF_HOSTED_ROADMAP.md)。
 
-当前独立神经语音、图像模型和权重训练尚未完成；语音/图像服务接口通过模拟服务验证，不能作为真实模型效果证据。AISHELL-3 仅准备了 30 条公开授权开发样本。[自主技术路线和研发边界](docs/MODEL_STRATEGY.md)区分自有交互算法、第三方基础组件与待训练模型。
+当前独立神经语音、图像模型和权重训练尚未完成；语音/图像服务接口通过模拟服务验证，不能作为真实模型效果证据。AISHELL-3 仅准备了 30 条公开授权开发样本。[自主技术路线和研发边界](docs/MODEL_STRATEGY.md)区分自有交互算法、第三方基础组件与待训练模型；[OpenMOSS 公开资料参考](docs/OPENMOSS_RESEARCH.md)区分公开思路和已经实现的部分。
 
 ```mermaid
 flowchart LR
@@ -18,7 +18,7 @@ flowchart LR
     VAD --> ASR[SSH → Whisper Small 整句识别]
     ASR --> STATE[对话事件树]
     TEXT[文字输入] --> STATE
-    STATE --> LLM[DeepSeek]
+    STATE --> LLM[自托管语言模型]
     LLM --> UI[情绪文字 / Three.js]
     LLM --> TTS[短段系统朗读]
     TTS -->|播放确认| STATE
@@ -27,8 +27,8 @@ flowchart LR
 
 ## 当前能力
 
-- DeepSeek 服务端调用，结构化输出异常时回退为可读文字；停止与重试不会追加重复的用户消息。
-- 浏览器持续录音 → WebSocket → VAD → 语音识别 → DeepSeek → 系统语音合成。输出声音时输入保持开启，插话取消旧回答和朗读；已说出的连续语句按序识别，避免被下一句覆盖。
+- 仅调用自托管语言模型，结构化输出异常时回退为可读文字；停止与重试不会追加重复的用户消息。
+- 浏览器持续录音 → WebSocket → VAD → 语音识别 → 自托管语言模型 → 系统语音合成。输出声音时输入保持开启，插话取消旧回答和朗读；已说出的连续语句按序识别，避免被下一句覆盖。
 - 语音必须主动点击开启；关闭后立即释放麦克风。无语音服务时仍可打字。
 - 六种表情和对应文字色，可关闭颜色与动作；主对话不直接执行任务，会议和工作台分别提供受约束的执行入口。
 - 自愿提交文字评价，生成可审阅的策略候选；独立真人比较满足门槛后才晋级，并保留旧版本。
@@ -41,12 +41,10 @@ flowchart LR
 
 ```powershell
 npm ci
-# 只在本机设置密钥，不写入前端或仓库
-$env:DEEPSEEK_API_KEY='你的密钥'
 npm start
 ```
 
-打开 http://127.0.0.1:8788 。也可指定 `XIM_CONFIG` 指向仓库外的私有 JSON 配置，字段为 `api_key`；兼容原有 BandiPrivate 本机配置。
+配置 `private/local-models.json` 指向自托管文本服务，或设置 `.env.example` 中的 `XIM_LOCAL_CHAT_URL` 与 `XIM_LOCAL_CHAT_MODEL`。服务需运行在本机回环地址或通过 SSH 转发。访问 http://127.0.0.1:8788 。模型未运行时不会回退到第三方 API。
 
 新安装建议 Python 3.11+；Windows 未配置远程服务时使用已安装的中文听写引擎。当前机器已通过 `private/asr.json` 选择 SSH 连接的服务器识别。建议在 PowerShell 7 的另一个终端启动：
 

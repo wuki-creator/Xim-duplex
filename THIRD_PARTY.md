@@ -8,8 +8,8 @@
 | faster-whisper | 语音识别服务；当前旧 Python 服务器使用 1.0.3 / CTranslate2 4.4.0，本机依赖清单为 1.2.1 | https://github.com/SYSTRAN/faster-whisper ，MIT；独立安装 |
 | Whisper Small / CTranslate2 模型 | 当前服务器识别权重，单独下载，不随仓库分发 | https://huggingface.co/Systran/faster-whisper-small ，按模型卡与上游许可使用；兼容 tiny 配置 |
 | Paramiko | SSH 加密转发，独立安装 | https://github.com/paramiko/paramiko ，按上游许可使用；本仓库不分发其包 |
-| DeepSeek | 服务端 API | https://api-docs.deepseek.com ，须使用有权限的账号；无权重分发 |
 | 系统语音合成 | 浏览器 SpeechSynthesis | 声音可用性与服务条款由浏览器/系统决定 |
+| Qwen2.5-1.5B-Instruct | 自托管文本模型候选，权重独立下载，不随仓库分发 | https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct ，模型卡标注 Apache-2.0；记录模型 revision 和权重校验值 |
 
 v0.9.0 移除了 MOSI/OpenMOSS 的运行接口、Nano 适配器和专用训练脚本；它们仅是历史研究参考，不是当前产品依赖。不读取旧的 `private/moss.json`，也不使用旧的 `MOSS_*` 环境变量。私有研究文件和数据不随本仓库分发。
 

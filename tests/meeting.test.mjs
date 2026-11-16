@@ -13,9 +13,9 @@ test('spoken meeting size and approval require explicit phrasing',()=>{
 
 test('agents form proposals first, revision invalidates the old approval, and explicit confirmation produces a result',async()=>{
   const mock=[];let solves=0;
-  const service=new MeetingService({key:'mock',model:'mock',request:async()=>{
+  const service=new MeetingService({url:'http://127.0.0.1:19999',model:'mock',request:async()=>{
     assert.ok(mock.length,'unexpected model execution');
-    return Response.json({choices:[{message:{content:JSON.stringify(mock.shift())}}]});
+    return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(mock.shift())}}]});
   },compute:async()=>{solves++;return {location:'server',duration:1.5,samples:[{position:[1,2,3]}]};}});
   const signal=AbortSignal.timeout(10000);const room=service.create();
   await service.input(room.id,'组织三个人开会',null,signal);
@@ -37,8 +37,8 @@ test('agents form proposals first, revision invalidates the old approval, and ex
 
 test('plans that require user clarification and unknown attendees cannot execute',async()=>{
   const mock=[];
-  const service=new MeetingService({key:'mock',model:'mock',request:async()=>{
-    assert.ok(mock.length,'unexpected execution');return Response.json({choices:[{message:{content:JSON.stringify(mock.shift())}}]});
+  const service=new MeetingService({url:'http://127.0.0.1:19999',model:'mock',request:async()=>{
+    assert.ok(mock.length,'unexpected execution');return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(mock.shift())}}]});
   }});
   const room=service.create(),signal=AbortSignal.timeout(10000);
   await service.input(room.id,'组织两个人开会',null,signal);
@@ -54,9 +54,9 @@ test('plans that require user clarification and unknown attendees cannot execute
 
 test('approved independent agent tasks run concurrently with a bounded worker count',async()=>{
   let running=0,maximum=0;
-  const service=new MeetingService({key:'mock',model:'mock',request:async()=>{
+  const service=new MeetingService({url:'http://127.0.0.1:19999',model:'mock',request:async()=>{
     running++;maximum=Math.max(maximum,running);await new Promise(r=>setTimeout(r,35));running--;
-    return Response.json({choices:[{message:{content:JSON.stringify({summary:'完成',deliverables:['已完成具体内容']})}}]});
+    return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({summary:'完成',deliverables:['已完成具体内容']})}}]});
   }});
   const room=service.create(),signal=AbortSignal.timeout(10000);
   await service.input(room.id,'组织三个人开会',null,signal);

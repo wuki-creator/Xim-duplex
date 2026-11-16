@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {checkAction,computeWorld,generateWorkbenchImage,simpleWorkbenchAction} from '../workbench.mjs';
+import {checkAction,computeWorld,generateWorkbenchImage,simpleWorkbenchAction,interpretWorkbench} from '../workbench.mjs';
 
 test('simple affirmative scene commands map common colors without a model round trip',()=>{
   assert.equal(simpleWorkbenchAction('添加一个红色方块。').color,'coral');
@@ -13,6 +13,15 @@ test('tool plans only use recognized objects and reject unlisted effects',()=>{
   const objects=[{id:'obj-1'}];
   assert.deepEqual(checkAction({action:'move',target:'obj-1',position:[2,1,-1],command:'ignored'},objects),{action:'move',target:'obj-1',position:[2,1,-1]});
   for(const action of [{action:'shell',command:'anything'},{action:'move',target:'obj-2',position:[2,1,0]},{action:'move',target:'obj-1',position:[0,Infinity,1]}])assert.equal(checkAction(action,objects).action,'talk');
+});
+
+test('workbench uses local model only and rejects truncated action plans',async()=>{
+  let called=0;
+  const output=await interpretWorkbench({url:'http://127.0.0.1:12345',model:'local',input:'移动选中的物体',context:{},request:async(url,opts)=>{
+    called++;assert.equal(url,'http://127.0.0.1:12345/v1/chat/completions');assert.equal(opts.headers.Authorization,undefined);
+    return Response.json({choices:[{finish_reason:'length',message:{content:'{"action":"physics"}'}}]});
+  }});
+  assert.equal(called,1);assert.equal(output.action,'talk');
 });
 
 test('local arm solver returns a forward-consistent trajectory and rejects unreachable points',async()=>{

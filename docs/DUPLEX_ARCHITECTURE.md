@@ -35,7 +35,7 @@
 
 持续麦克风输入 → 回声处理/目标说话人 → 中文流式 ASR → 语义轮次管理 → 流式 LLM → 流式 TTS → 带播放确认的音频队列。输入始终运行，不能等输出结束才监听。
 
-[FunASR](https://github.com/modelscope/FunASR) 提供中文流式识别路径，可评估其在线 Paraformer 等模型；[CosyVoice](https://github.com/FunAudioLLM/CosyVoice) 提供流式文本输入和音频输出能力，可作为 TTS 候选。二者仅为待部署/实测的候选，不能直接套用上游延迟作为本平台成绩。DeepSeek 仍可担当文本规划与回应，API 不允许我们编辑其内部 CoT 或 KV 缓存。
+[FunASR](https://github.com/modelscope/FunASR) 提供中文流式识别路径，可评估其在线 Paraformer 等模型；[CosyVoice](https://github.com/FunAudioLLM/CosyVoice) 提供流式文本输入和音频输出能力，可作为 TTS 候选。二者仅为待部署/实测的候选，不能直接套用上游延迟作为本平台成绩。v0.9.1 使用自托管文本服务，不调用 DeepSeek；可观察对话树不等于模型内部 CoT。
 
 需要让 ASR 发出 interim/revision/final，而不是只返回一句最终文本。临时转写只用于预判，不直接提交用户轮次。语义控制器联合最近转写、韵律、VAD、回声信息和助手播放进度，输出 continue / backchannel / yield / correct / resume / topic_shift。模型不确定时先让出话语权，再澄清。
 
