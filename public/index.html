@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#111b18">
+  <title>伴点 · 对话舱</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/room.css">
+</head>
+<body>
+  <header class="room-header">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span><b>Xim<span> · 伴点</span></b></div>
+    <div class="room-tools">
+      <span id="connection" role="status">正在连接</span>
+      <button id="mute" type="button" aria-pressed="false">声音关闭</button>
+      <button id="clear" type="button">新对话</button>
+    </div>
+  </header>
+  <main class="room" data-screen-label="01 对话舱">
+    <section class="presence" aria-labelledby="room-title">
+      <div class="room-intro">
+        <p class="eyebrow"><span aria-hidden="true"></span> XIM DUPLEX</p>
+        <h1 id="room-title">双工对话舱</h1>
+        <p>留一点时间，说说话，或安静待一会儿。</p>
+      </div>
+      <div class="tabletop">
+        <div class="tabletop-ring" aria-hidden="true"></div>
+        <button type="button" id="pet" class="robot warm" aria-label="摸摸伴点的头">
+          <span class="robot-stage" aria-hidden="true"></span>
+          <span class="ears" aria-hidden="true"></span>
+          <span class="body" aria-hidden="true"><span class="face"><i class="eye left"></i><i class="eye right"></i><span class="mouth"></span></span></span>
+          <span class="base" aria-hidden="true"></span>
+        </button>
+        <span class="tabletop-notch left" aria-hidden="true"></span><span class="tabletop-notch right" aria-hidden="true"></span>
+      </div>
+      <div class="stage-caption">
+        <div class="mood"><span id="emotion">温暖</span><span id="state">我在这里</span></div>
+        <p id="subtitle" aria-hidden="true">今天有什么小事，想和我说说？</p>
+      </div>
+      <div class="pet-controls"><div class="inline-preferences"><label><input id="color" type="checkbox" checked> 情绪颜色</label><label><input id="motion" type="checkbox" checked> 动作</label></div>
+        <p id="touch">轻触伴点，打个招呼。</p>
+        <div class="palette" aria-label="预览伴点的六种表情">
+          <button type="button" data-mood="joy" aria-pressed="false">开心</button>
+          <button type="button" data-mood="warm" aria-pressed="true">温暖</button>
+          <button type="button" data-mood="calm" aria-pressed="false">平静</button>
+          <button type="button" data-mood="curious" aria-pressed="false">好奇</button>
+          <button type="button" data-mood="support" aria-pressed="false">陪伴</button>
+          <button type="button" data-mood="celebrate" aria-pressed="false">庆祝</button>
+        </div>
+      </div>
+    </section>
+    <section class="workspace" aria-label="伴点操作面板">
+
+      <section id="chatPanel" aria-labelledby="conversation-title">
+        <div class="chat-heading"><h2 id="conversation-title">和伴点聊聊</h2><span>此刻对话</span></div>
+        <div class="thread">
+          <div id="messages" role="log" aria-label="对话记录" aria-live="polite" tabindex="0">
+            <article class="assistant"><small>伴点 · 温暖</small><p>今天有什么小事，想和我说说？</p></article>
+          </div>
+          <button type="button" id="jumpLatest" hidden>回到最新消息 ↓</button>
+        </div>
+        <div class="conversation-dock"><div class="voice-tools"><button id="voiceStart" type="button">开始语音</button><span id="voiceStatus" role="status">文字与语音，随你选择</span></div>
+          <div class="suggestions" aria-label="对话建议">
+            <button type="button" data-prompt="我今天终于完成了一件拖延很久的事">分享小开心</button>
+            <button type="button" data-prompt="我有点累，先别给建议，陪我聊两句">陪我缓一缓</button>
+            <button type="button" data-prompt="和我聊聊今天有哪些值得期待的小事">随便聊聊</button>
+          </div>
+          <form id="chatForm">
+            <label class="sr-only" for="input">给伴点的话</label>
+            <div class="compose">
+              <textarea id="input" maxlength="2000" rows="2" placeholder="想说的话，就放在这里…" required></textarea>
+              <button id="send" class="primary" type="submit">发送 <span aria-hidden="true">↑</span></button>
+              <button type="button" id="stop" hidden>停止</button>
+            </div>
+            <label class="feedback-consent"><input id="feedbackConsent" type="checkbox">将我主动提交的评价及对应文字用于改进</label><p class="key-guide">Enter 发送 · Shift + Enter 换行</p>
+          </form>
+        </div>
+      </section>
+      <p id="error" role="status"></p>
+    </section>
+  </main>
+  <section class="film-section"><button id="filmOpen" type="button">观看 Xim 概念演示 ↗</button><dialog id="filmDialog"><button id="filmClose" type="button" aria-label="关闭演示">关闭</button><h2>Xim Duplex</h2><p>交互概念演示 · 非性能实测</p><video controls preload="metadata" playsinline poster="/media/poster.png"><source src="/media/xim-demo.mp4" type="video/mp4"></video></dialog></section>
+  <footer class="room-footer"><span>伴点 · 个人陪伴空间</span><span>v0.6</span></footer>
+
+  <script src="/app.js"></script>
+  <script type="module" src="/robot3d.js"></script>
+  <script type="module" src="/voice-client.js"></script>
+</body>
+</html>

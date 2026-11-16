@@ -1,0 +1,150 @@
+:root {
+  color-scheme: dark;
+  --paper: #101916;
+  --ink: #f0f3e9;
+  --muted: #afc0b5;
+  --line: #9dbab735;
+  --surface: #172622;
+  --mint: #c9e4cb;
+  --accent: #f0c790;
+}
+[hidden] { display:none!important }
+body {
+  min-height:100vh;
+  background: radial-gradient(ellipse at 26% 44%, #284138 0%, #172722 40%, transparent 69%), #101916;
+  font: 15px/1.55 "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+button { border-radius:12px; min-height:44px; }
+button:hover { background:#a5ccaf19 }
+button:disabled { cursor:default }
+button:focus-visible, input:focus-visible, textarea:focus-visible, #messages:focus-visible { outline:2px solid #e7d39b;outline-offset:3px }
+.primary { background:var(--mint); color:#162b22; border-color:transparent; font-weight:bold }
+.primary:hover { background:#e0f3de }
+.room-header,.room-footer {max-width:none; padding:16px clamp(22px,5vw,84px);gap:16px}
+.room-header {border-color:#bad7bf23;background:#0d181540}
+.brand,.room-tools {display:flex;align-items:center;gap:14px}
+.brand {margin-right:auto;white-space:nowrap;flex-shrink:0}
+.brand b {font:600 26px/1 Georgia,serif;letter-spacing:-.035em;margin:0}
+.brand b span {font:600 12px/1 "Microsoft YaHei",sans-serif;letter-spacing:.14em;color:#c0cfc4}
+.brand-mark {display:block;width:28px;height:21px;border-radius:8px;position:relative;border:1px solid #a4bda6;background:#314a3c}
+.brand-mark:before,.brand-mark:after {content:"";width:3px;height:7px;border-radius:999px;background:#f6d092;position:absolute;top:6px}
+.brand-mark:before {left:8px}.brand-mark:after {right:8px}
+#connection {display:inline-flex;align-items:center;gap:7px;color:#c5d2c8;white-space:nowrap;font-size:11px}
+#connection:before,.eyebrow span {content:"";display:inline-block;width:6px;height:6px;border-radius:100%;background:#b3d6b5;box-shadow:0 0 10px #a1d6ae77}
+#connection[data-offline]:before {background:#dbba8d;box-shadow:none}
+#mute {border-color:#a6c2ae47;padding:8px 12px;font-size:12px;white-space:nowrap}
+.room {
+  max-width:1500px;
+  grid-template-columns:minmax(310px,.93fr) minmax(420px,1.07fr);
+  align-items:center;
+  gap:clamp(22px,5vw,86px);
+  padding:clamp(24px,4.2vw,58px) clamp(22px,5vw,84px);
+}
+.presence {position:relative;min-width:0;text-align:center}
+.room-intro .eyebrow {margin:0;display:flex;align-items:center;justify-content:center;gap:9px;color:#c5d2c8;font:600 10px/1.4 Arial,sans-serif;letter-spacing:.26em}
+.room-intro h1 {font:600 clamp(32px,3.7vw,57px)/1.16 "Songti SC","SimSun","Microsoft YaHei",serif;letter-spacing:.025em;margin:13px 0 6px}
+.room-intro p:last-child {font-size:13px;color:var(--muted);margin:0}
+.tabletop {position:relative;isolation:isolate;display:grid;place-items:center;margin:5px auto -5px;width:100%;max-width:528px}
+.tabletop-ring {position:absolute;left:10%;right:10%;top:17%;bottom:14%;max-width:330px;margin:auto;border-radius:50%;border:1px solid #b6d3bd24;background:radial-gradient(circle,#b7deac22,transparent 70%);pointer-events:none}
+.tabletop-ring:after {content:"";position:absolute;inset:13%;border:1px solid #b6d3bd15;border-radius:50%}
+.tabletop-notch {position:absolute;top:60%;width:20px;height:1px;background:#b6d3bd44;pointer-events:none}
+.tabletop-notch.left {left:8%}.tabletop-notch.right {right:8%}
+#pet {width:min(100%,460px); height:clamp(290px,29vw,410px);margin:0;padding:0;touch-action:manipulation}
+.stage-caption {max-width:440px;margin:-3px auto 0;background:#111b18c7;border:1px solid var(--line);border-radius:14px;padding:11px 16px;position:relative}
+.mood {gap:9px;color:#dae6db;font-size:12px}
+#emotion {padding:2px 9px;color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
+#subtitle {margin:7px 0 0;font-size:clamp(14px,1.25vw,17px);line-height:1.55;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+#touch {margin:11px 0 0;color:var(--muted);font-size:11px}
+.palette {gap:3px;margin:3px 0}
+.palette button {min-height:44px;padding:6px 9px;color:#ebd09d!important}
+.palette button:nth-child(2) {color:#edb39a!important}
+.palette button:nth-child(3) {color:#afdbb6!important}
+.palette button:nth-child(4) {color:#d8c3f3!important}
+.palette button:nth-child(5) {color:#abd2f0!important}
+.palette button:nth-child(6) {color:#f4b8d3!important}
+.palette button[aria-pressed=true],.palette button:hover {border-color:#b0cbb364;background:#d0e6ce18}
+.workspace {
+  position:relative;isolation:isolate;
+  display:flex;flex-direction:column;
+  min-width:0;height:clamp(565px,calc(100dvh - 188px),760px);
+  padding:17px clamp(15px,2vw,28px) 13px;
+  border:1px solid #c1ddc54d;border-radius:26px;
+  background:linear-gradient(160deg,#2a3f36df,#14231fee 63%);
+  box-shadow:0 25px 55px #080e0c70, inset 0 1px 0 #d1edd921;
+  backdrop-filter:blur(16px);
+}
+.workspace nav {width:fit-content;max-width:100%;align-items:center;gap:3px;margin:0;border:1px solid var(--line);border-radius:99px;background:#101b18b3;padding:3px}
+.workspace nav button {white-space:nowrap;flex:0 1 auto;border:0;min-height:38px;padding:6px 13px;border-radius:99px;color:#bfd0c3;font-size:12px}
+.workspace nav button.active {border:0;background:#c1dec738;color:#f3f7ef}
+#chatPanel {flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
+.chat-heading {padding:5px 0 2px;justify-content:space-between}
+.chat-heading h2 {font-size:22px;font-weight:600;line-height:1.3;margin:11px 0}
+.chat-heading>span {color:#d1ddd3;border:1px solid var(--line);border-radius:999px;padding:3px 8px;flex-shrink:0}
+.thread {position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
+#messages {
+  height:auto;flex:1;min-height:0;
+  display:flex;flex-direction:column;gap:13px;
+  overflow:auto;overscroll-behavior-y:contain;
+  padding:6px 4px 13px;margin-right:-4px;
+  scrollbar-width:thin;scrollbar-color:#77948366 transparent;
+}
+#messages article {border-radius:16px;border:1px solid #b6d5bf35;max-width:92%;width:fit-content;margin:0;padding:11px 14px;align-self:flex-start;background:#b5d7bb15;font-size:15px;letter-spacing:.01em}
+#messages article.user {background:#84af9333;border-radius:16px 16px 5px 16px;align-self:flex-end}
+#messages article.assistant {border-radius:16px 16px 16px 5px}
+#messages article small {color:#bbcec0;font-size:11px;display:block;margin-bottom:4px}
+#messages article p {white-space:pre-wrap;margin:3px 0;overflow-wrap:anywhere}
+#messages article.pending {color:#d3e4d7}
+#messages article.pending p:before {content:"";display:inline-block;width:6px;height:6px;margin-right:8px;border-radius:50%;background:#d6e8c9;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse {50%{opacity:.32}}
+.turn-status {font:12px/1.5 "Microsoft YaHei",sans-serif;color:#e8c49f;margin:5px 0 0}
+.no-motion .pending p:before {animation:none!important}
+.segment {color:var(--tone,var(--ink))}
+.no-color .segment {color:var(--ink)!important}
+#jumpLatest {position:absolute;bottom:8px;right:7px;z-index:1;min-height:35px;font-size:11px;background:#263e32;padding:4px 10px;box-shadow:0 4px 16px #08141166}
+.retry-turn {min-height:36px;padding:3px 10px;margin-top:6px;font-size:12px;color:#f2dbc1;border-color:#d8b79266}
+.conversation-dock {border-top:1px solid #cadfca28;margin-top:4px;padding:9px 0 0}
+.suggestions {margin:0 0 9px;gap:6px}
+.suggestions button {min-height:38px;color:#d5e4d8;border-color:#a3c5ae52;padding:5px 11px;font-size:12px;border-radius:999px}
+.compose {align-items:center;padding:5px;border:1px solid #acd2b772;border-radius:15px;background:#0c1916d9}
+.compose:focus-within {border-color:#c5e4cb}
+.compose textarea {background:transparent;border:0;resize:none;min-width:0;min-height:51px;max-height:108px;padding:5px 6px 5px 10px;color:var(--ink)}
+.compose textarea:focus-visible {outline:none}
+.compose textarea::placeholder {color:#adc3b4;opacity:1}
+.compose button {font-size:13px;white-space:nowrap;padding:7px 12px;border-radius:10px}
+.compose .primary span {margin-left:5px}
+.key-guide {margin:5px 2px 0;color:#9eb7a9;font-size:10px}
+#error {min-height:0;margin:0;color:#ffd2ac;overflow-wrap:anywhere}
+#error:not(:empty) {margin:6px 0 0}
+.task-card {border-color:#9bbfa38c;font-size:13px}
+.task-card button,.feedback-buttons button {min-height:36px}
+.feedback-buttons button {color:#c3d6c8;padding:2px 7px}
+.utility-panel {flex:1;overflow:auto;min-height:0;padding:6px 2px}
+.utility-panel h2 {font-size:22px}
+.utility-panel>p,.utility-panel .caption {color:var(--muted)}
+input:not([type=checkbox]),select {background:#101e19;color:var(--ink);border:1px solid var(--line)}
+.setting select {max-width:100%;border-radius:8px;padding:6px}
+#timer {color:#cae3c9}
+.room-footer {font-size:11px;color:#abc3b0;border-color:#b0ccb12b}
+.sr-only {position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+@media (max-width:850px) {
+  .room {grid-template-columns:1fr;gap:22px;padding:21px 18px 27px}
+  .room-header,.room-footer {padding:10px 18px;gap:9px}
+  .brand,.room-tools {gap:8px}
+  .brand b {font-size:23px}
+  #mute {padding-inline:8px}
+  .workspace {height:560px;max-height:none;padding-inline:14px}
+  .room-intro h1 {font-size:34px}
+  #pet {height:270px}
+  .stage-caption {max-width:380px}
+  .key-guide {display:none}
+}
+@media (max-width:360px) {
+  .brand b {font-size:21px}.brand b span {display:none}
+  .room-header,.room-footer {padding-inline:12px}
+  .room {padding-inline:9px}
+  .workspace nav button {padding-inline:10px}
+}
+@media (prefers-reduced-motion:reduce) {
+  #messages article.pending p:before {animation:none}
+}
+.voice-tools{display:flex;align-items:center;gap:12px;margin-bottom:10px}.voice-tools span{font-size:11px;color:#bcd6c7}.voice-tools button{white-space:nowrap;font-size:12px}.inline-preferences{display:flex;justify-content:center;gap:18px;font-size:12px;margin-top:10px}.feedback-consent{display:flex;align-items:center;gap:6px;font-size:10px;color:#adc4b4;margin:8px 2px 0}.film-section{text-align:center;padding:0 20px 24px}.film-section>button{color:#c8e5d7;border-color:#9bcdb666;font-size:12px}dialog{background:#101e19;color:#f3f6ef;border:1px solid #91c3a777;border-radius:20px;width:min(920px,94vw);max-height:90vh}dialog::backdrop{background:#04100dde;backdrop-filter:blur(8px)}dialog video{width:100%;border-radius:12px}dialog p{font-size:12px;color:#bbd6c4}#filmClose{float:right}.room-tools>button{white-space:nowrap;padding:7px 10px;font-size:12px}@media(max-width:600px){#connection{display:none}}
