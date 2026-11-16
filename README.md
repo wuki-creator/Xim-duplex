@@ -8,6 +8,8 @@
 
 **[查看当前模型流程图与打断续接时序 →](docs/MODEL_FLOW.md)** · [原生全双工改造方案](docs/DUPLEX_ARCHITECTURE.md)
 
+v0.7.0 增加 [模思模型适配与启用指南](docs/MOSI_INTEGRATION.md)：MOSS-Live 实时语音、Nex 对话、模思转写和角色语音可单独启用。当前无模思密钥，基础语音继续用 Whisper，文本继续用 DeepSeek。
+
 v0.6.2 保留播放位置确认和打断后的对话分支，修正连续语句丢失，并将当前机器的识别切换为服务器 Whisper Small（SSH 连接）。三条合成语音及静音检查通过，用户也已确认能识别真实讲话。此前 Windows 听写真人测试失败；复杂重叠对话仍待验证，不能宣称完整原生全双工已经可用。
 
 ```mermaid

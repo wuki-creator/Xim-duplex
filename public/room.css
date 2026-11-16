@@ -32,6 +32,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, #messages:foc
 #connection {display:inline-flex;align-items:center;gap:7px;color:#c5d2c8;white-space:nowrap;font-size:11px}
 #connection:before,.eyebrow span {content:"";display:inline-block;width:6px;height:6px;border-radius:100%;background:#b3d6b5;box-shadow:0 0 10px #a1d6ae77}
 #connection[data-offline]:before {background:#dbba8d;box-shadow:none}
+.voice-options{display:flex;align-items:center;gap:9px;font-size:12px;color:#bfd4c7;margin-bottom:6px}
+.voice-options select{background:#16241f;color:#e4eee5;border:1px solid #42574a;border-radius:8px;padding:6px}
+#voicePrivacy{font-size:11px;color:#c0d1c5;margin:0 0 8px}
 #mute {border-color:#a6c2ae47;padding:8px 12px;font-size:12px;white-space:nowrap}
 .room {
   max-width:1500px;

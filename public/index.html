@@ -60,6 +60,8 @@
           <button type="button" id="jumpLatest" hidden>回到最新消息 ↓</button>
         </div>
         <div class="conversation-dock"><div class="voice-tools"><button id="voiceStart" type="button">开始语音</button><span id="voiceStatus" role="status">文字与语音，随你选择</span></div>
+          <label id="voiceOptions" class="voice-options" hidden>语音模式 <select id="voiceMode"><option value="cascade">基础语音</option><option value="live">实时语音</option></select></label>
+          <p id="voicePrivacy" hidden></p>
           <div id="voiceDiagnostics" class="voice-diagnostics" hidden>
             <label>麦克风 <select id="microphone"><option value="">系统默认</option></select></label>
             <label>音量 <meter id="micLevel" min="0" max="1" value="0" aria-label="麦克风输入音量"></meter></label>
@@ -88,7 +90,7 @@
     </section>
   </main>
   <section class="film-section"><button id="filmOpen" type="button">观看 Xim 概念演示 ↗</button><dialog id="filmDialog"><button id="filmClose" type="button" aria-label="关闭演示">关闭</button><h2>Xim Duplex</h2><p>交互概念演示 · 非性能实测</p><video controls preload="metadata" playsinline poster="/media/poster.png"><source src="/media/xim-demo.mp4" type="video/mp4"></video></dialog></section>
-  <footer class="room-footer"><span>伴点 · 个人陪伴空间</span><span>v0.6.2</span></footer>
+  <footer class="room-footer"><span>伴点 · 个人陪伴空间</span><span>v0.7.0</span></footer>
 
   <script type="module" src="/app.js"></script>
   <script type="module" src="/robot3d.js"></script>
