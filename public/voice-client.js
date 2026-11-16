@@ -1,19 +1,50 @@
 import {LivePlayer} from './live-player.js';
+import {LiveTurns} from './live-turns.js';
 const button=document.querySelector('#voiceStart'),status=document.querySelector('#voiceStatus');
+const continueTurn=document.querySelector('#continueTurn'),liveTurns=new LiveTurns();
 const options=document.querySelector('#voiceOptions'),modeSelect=document.querySelector('#voiceMode'),privacy=document.querySelector('#voicePrivacy');
 const diagnostics=document.querySelector('#voiceDiagnostics'),meter=document.querySelector('#micLevel'),hint=document.querySelector('#micHint'),devices=document.querySelector('#microphone'),finish=document.querySelector('#finishSpeech'),sensitivity=document.querySelector('#sensitivity'),transcript=document.querySelector('#lastTranscript');
 let socket,stream,context,node,source,gain,player,route='cascade',active=false,pending=false,generation=0;
 let watcher,lastPacket=0,lastSound=0,startedAt=0,speechAt=0,packets=0;
+let liveWatch,handoff,voiceBoot;
 const control=data=>{if(socket?.readyState===1)socket.send(JSON.stringify(data));};
 function voiceOptions(boot){
   options.hidden=!boot.voiceLive;
   modeSelect.disabled=active||pending;
   privacy.hidden=!(modeSelect.value==='live'||boot.cloudAsr);
-  privacy.textContent=modeSelect.value==='live'?'实时语音会将麦克风音频发送给模思。':'当前基础语音的转写由模思处理。';
+  privacy.textContent=modeSelect.value==='live'?'实时语音会将麦克风音频发送给模思；没有及时接话时可用基础语音接续。':'当前基础语音的转写由模思处理。';
   modeSelect.onchange=()=>voiceOptions(boot);
 }
 window.addEventListener('xim:bootstrap',e=>voiceOptions(e.detail));
 if(window.ximChat?.voiceSettings)voiceOptions(window.ximChat.voiceSettings);
+function setupCascade(){
+  finish.hidden=false;sensitivity.closest('label').hidden=false;
+  control({type:'sensitivity',threshold:Number(sensitivity.value)});
+}
+function assist(automatic=false){
+  if(route!=='live'||!active||!voiceBoot?.configured||handoff||player?.playing)return;
+  if(automatic&&Date.now()-lastSound<180)return;
+  const turn=liveTurns.take(performance.now(),{automatic});if(!turn)return;
+  continueTurn.hidden=true;
+  const deliver=()=>window.dispatchEvent(new CustomEvent('xim:live-recover',{detail:turn}));
+  if(!voiceBoot.asrReady){stop('实时语音暂未接话，先为你回答这句。');deliver();return;}
+  player?.close();player=null;clearInterval(liveWatch);liveWatch=null;
+  route='cascade';modeSelect.value='cascade';voiceOptions(voiceBoot);
+  status.textContent='实时语音未及时回应，正在接续这句…';
+  const timer=setTimeout(()=>{stop('实时语音未及时回应，先为你回答这句。');deliver();},2500);
+  handoff={timer,deliver};control({type:'live.fallback'});
+}
+continueTurn.onclick=()=>assist();
+function trackLiveWait(){
+  const now=performance.now(),wait=liveTurns.waiting(now);
+  continueTurn.hidden=!(voiceBoot?.configured&&wait?.elapsed>=2800&&!player?.playing);
+  const update=text=>{if(status.textContent!==text)status.textContent=text;};
+  if(wait?.elapsed>=2800&&!player?.playing)update(wait.recoverable?'已经听清，正在等伴点接话…':'麦克风仍开启 · 可以继续说');
+  if(wait?.recoverable&&wait.elapsed>=6500)assist(true);
+  if(liveTurns.stoppedAt!==null&&now-liveTurns.stoppedAt>3500&&!liveTurns.current?.text&&!player?.playing){
+    update('这一句还没听清，可以再说一次。');
+  }
+}
 finish.onclick=()=>{control({type:'speech.finish'});finish.disabled=true;};
 sensitivity.onchange=()=>control({type:'sensitivity',threshold:Number(sensitivity.value)});
 devices.onchange=()=>{if(active||pending){stop('正在切换麦克风…');button.click();}};
@@ -27,6 +58,7 @@ async function listDevices(){
 function stop(text='语音已结束'){
   generation++;active=false;pending=false;
   clearInterval(watcher);watcher=null;finish.disabled=true;meter.value=0;speechAt=0;
+  clearInterval(liveWatch);liveWatch=null;clearTimeout(handoff?.timer);handoff=null;liveTurns.clear();continueTurn.hidden=true;
   stream?.getTracks().forEach(t=>t.stop());stream=null;
   if(node){node.port.onmessage=null;node.disconnect();node=null;}
   source?.disconnect();source=null;gain?.disconnect();gain=null;
@@ -44,6 +76,7 @@ button.onclick=async()=>{
   pending=true;route=modeSelect.value;modeSelect.disabled=true;const ticket=++generation;button.textContent='取消连接';status.textContent='正在连接语音服务…';
   try{
     const boot=await fetch('/api/bootstrap').then(r=>r.json());if(ticket!==generation)return;
+    voiceBoot=boot;
     if(route==='live'&&!boot.voiceLive){stop('实时语音尚未配置，请选择基础语音。');return;}
     if(route!=='live'&&!boot.asrReady){stop('基础语音服务未启动，文字对话可正常使用。');return;}
     if(!navigator.mediaDevices?.getUserMedia){stop('此浏览器无法访问麦克风。');return;}
@@ -63,7 +96,10 @@ button.onclick=async()=>{
     socket.onmessage=e=>{
       if(ticket!==generation)return;
       if(typeof e.data!=='string'){
-        try{player?.speakFrame(e.data);}catch{stop('实时音频无法播放。请重试或切回基础语音。');}return;
+        try{
+          const audio=player?.speakFrame(e.data);
+          if(audio){liveTurns.audio(audio);continueTurn.hidden=true;status.textContent='伴点在说 · 你也可以开口';}
+        }catch{stop('实时音频无法播放。请重试或切回基础语音。');}return;
       }
       let msg;try{msg=JSON.parse(e.data);}catch{return;}
       if(msg.type==='ready'){
@@ -72,7 +108,13 @@ button.onclick=async()=>{
         const live=msg.mode==='live';
         finish.hidden=live;sensitivity.closest('label').hidden=live;
         transcript.textContent='';
-        if(live)player=new LivePlayer(context,value=>control(value));else control({type:'sensitivity',threshold:Number(sensitivity.value)});
+        if(live){
+          liveTurns.clear();liveWatch=setInterval(trackLiveWait,250);
+          player=new LivePlayer(context,value=>{
+            control(value);
+            if(value.action==='playback.completed')window.dispatchEvent(new CustomEvent('xim:live-played',{detail:value}));
+          });
+        }else setupCascade();
         source=context.createMediaStreamSource(stream);
         node=new AudioWorkletNode(context,'xim-capture');
         gain=context.createGain();gain.gain.value=0;
@@ -94,21 +136,26 @@ button.onclick=async()=>{
         watcher=setInterval(()=>{
           const now=Date.now();
           if(now-lastPacket>2500)hint.textContent='没有收到麦克风音频，请切换麦克风或重新连接。';
-          else if(!live&&speechAt&&now-speechAt>4500)hint.textContent='如果已经说完但仍显示正在听，背景声可能阻止了断句。请点击“这句说完了”。';
-          else if(!speechAt&&now-lastSound>6000&&now-startedAt>6000)hint.textContent=live?'若你正在讲话但音量很低，可切换麦克风。':'音量较低或没有说话。若你正在讲话，请切换麦克风或选择“轻声”。';
+          else if(route!=='live'&&speechAt&&now-speechAt>4500)hint.textContent='如果已经说完但仍显示正在听，背景声可能阻止了断句。请点击“这句说完了”。';
+          else if(!speechAt&&now-lastSound>6000&&now-startedAt>6000)hint.textContent=route==='live'?'若你正在讲话但音量很低，可切换麦克风。':'音量较低或没有说话。若你正在讲话，请切换麦克风或选择“轻声”。';
         },1000);
         window.dispatchEvent(new Event('xim:voice-ready'));
       }else if(msg.type==='live.chunk'&&player){player.pending=msg.data;
       }else if(msg.type==='live.event'&&player){
-        const {action,data}=msg;
+        const {action,data}=msg;const now=performance.now();let group;
         try{player.event(action,data);}catch{stop('实时音频无法播放。请重试或切回基础语音。');return;}
-        if(action==='input.speech.started'){speechAt=Date.now();status.textContent='正在听你说…';}
-        if(action==='input.speech.stopped'){speechAt=0;status.textContent='等伴点接话…';}
+        if(action==='input.speech.started'){liveTurns.start();continueTurn.hidden=true;speechAt=Date.now();status.textContent='正在听你说…';}
+        if(action==='input.speech.stopped'){liveTurns.stop(now);speechAt=0;status.textContent='等伴点接话…';}
+        if(action==='input.transcript.done'||action==='input.transcript.revised')group=liveTurns.confirm(data,now,action==='input.transcript.revised');
         if(action==='input.transcript.updated'||action==='input.transcript.done')transcript.textContent=data.text?'听到：'+data.text:'';
-        if(action==='response.audio.started')status.textContent='伴点在说 · 你也可以开口';
-        if(action==='response.audio.stop'||action==='response.interrupted')status.textContent='已让你先说';
+        if(action==='response.audio.started')liveTurns.associate(data);
+        if(action==='response.audio.stop'||action==='response.interrupted')status.textContent=speechAt?'已让你先说':'麦克风已开启 · 可以继续聊';
         if(action==='response.ended'&&data.status==='completed')status.textContent='实时语音已开启 · 可以继续聊';
-        window.dispatchEvent(new CustomEvent('xim:live-event',{detail:{action,data}}));
+        window.dispatchEvent(new CustomEvent('xim:live-event',{detail:{action,data,group}}));
+      }else if(msg.type==='fallback.ready'&&handoff){
+        const {timer,deliver}=handoff;clearTimeout(timer);handoff=null;speechAt=0;
+        setupCascade();status.textContent='基础语音已接上 · 麦克风保持开启';
+        hint.textContent='已用你刚说的话继续回应，无需重说。';deliver();
       }else if(msg.type==='speech.start'){
         speechAt=Date.now();finish.disabled=false;
         window.dispatchEvent(new Event('xim:speech-start'));status.textContent='正在听你说…';

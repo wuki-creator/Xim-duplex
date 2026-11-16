@@ -41,7 +41,7 @@ const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://localhost');
   if(req.method==='GET'&&url.pathname==='/api/bootstrap'){
     const asr=await fetch(asrURL+'/health',{signal:AbortSignal.timeout(1000)}).then(r=>r.json()).catch(()=>({ready:false}));
-    return send(res,200,{token,configured:Boolean(key||mossChat),model:mossChat?nexModel:model,emotions,asrReady:asr.ready===true||cloudAsr,asrModel:cloudAsr?mossASR:asr.model||null,voiceLive:liveAvailable,cloudAsr,cloudTts:Boolean(mossKey&&mossVoice),version:'0.7.0',policy:styles.id});
+    return send(res,200,{token,configured:Boolean(key||mossChat),model:mossChat?nexModel:model,emotions,asrReady:asr.ready===true||cloudAsr,asrModel:cloudAsr?mossASR:asr.model||null,voiceLive:liveAvailable,cloudAsr,cloudTts:Boolean(mossKey&&mossVoice),version:'0.7.1',policy:styles.id});
   }
   if(url.pathname.startsWith('/api/')){
     if(req.method!=='POST'||req.headers['x-bandi-token']!==token||!String(req.headers['content-type']).startsWith('application/json')||
@@ -94,7 +94,7 @@ const server=http.createServer(async(req,res)=>{
     }
     return send(res,404,{error:'NOT_FOUND'});
   }
-  const assets=new Set(['index.html','app.js','dialogue-state.js','room.css','style.css','robot3d.js','voice-client.js','live-player.js','capture-worklet.js','vendor/three.module.js','vendor/three.core.js','media/xim-demo.mp4','media/poster.png']);
+  const assets=new Set(['index.html','app.js','dialogue-state.js','room.css','style.css','robot3d.js','voice-client.js','live-player.js','live-turns.js','capture-worklet.js','vendor/three.module.js','vendor/three.core.js','media/xim-demo.mp4','media/poster.png']);
   const name=url.pathname==='/'?'index.html':url.pathname.slice(1);
   if(!assets.has(name)||!['GET','HEAD'].includes(req.method))return send(res,404,{error:'NOT_FOUND'});
   const bytes=await fs.readFile(path.join(root,'public',name));
@@ -172,7 +172,7 @@ wss.on('connection',ws=>{
         const msg=JSON.parse(data);if(msg.token!==token)throw Error();authorized=true;clearTimeout(authTimer);
         if(msg.mode==='live'){
           if(!liveAvailable){output({type:'error',message:'实时语音尚未配置，可选择基础语音。'});ws.close(1008,'Not configured');return;}
-          live=connectLive({key:mossKey,voice:liveVoice,instructions:'只进行对话，不执行外部任务。用用户的语言简短回应。对方还在组织语言时耐心听，区分附和和纠正；被纠正时从新意图继续。不要夸大能力。'+styles.instruction,
+          live=connectLive({key:mossKey,voice:liveVoice,instructions:'只进行对话，不执行外部任务。用户说完一句明确的问题或感受时，用一句短话直接接住，再视情况补充；不用等对方再开口或重复。短暂词间停顿、咳嗽或附和不抢话。被纠正时接住新意思。不要夸大能力。'+styles.instruction,
             send:(value,isPcm)=>{
               if(ws.bufferedAmount>512000){ws.close(1013,'Slow connection');return;}
               if(isPcm){if(ws.readyState===1)ws.send(value,{binary:true});}else output(value);
@@ -185,7 +185,12 @@ wss.on('connection',ws=>{
     if(!binary){
       try{
         const message=JSON.parse(data);
-        if(live){live.playback(message);return;}
+        if(live){
+          if(message.type==='live.fallback'){
+            live.close();live=null;vad.reset();output({type:'fallback.ready'});return;
+          }
+          live.playback(message);return;
+        }
         if(message.type==='speech.finish'){if(!vad.finish())output({type:'no_speech'});return;}
         if(message.type==='sensitivity'&&Number.isFinite(message.threshold)&&message.threshold>=.004&&message.threshold<=.04){vad.threshold=message.threshold;return;}
       }catch{}

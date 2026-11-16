@@ -248,7 +248,7 @@ $('color').onchange=()=>document.body.classList.toggle('no-color',!$('color').ch
 $('motion').onchange=()=>document.body.classList.toggle('no-motion',!$('motion').checked);
 $('clear').onclick=()=>{
   window.ximVoice?.stop('已开始新对话，语音已关闭。');
-  stop();dismissRetry();dialogue.clear();input.value='';
+  stop();dismissRetry();dialogue.clear();resetLiveLog();input.value='';
   lastSubtitle='我们从这里重新开始吧。';subtitle(lastSubtitle);
   messages.replaceChildren(card('assistant','伴点',lastSubtitle));mood('warm');
   note('对话已清空。');
@@ -269,29 +269,52 @@ document.querySelector('#filmClose').onclick=()=>filmDialog.close();
 filmDialog.addEventListener('close',()=>filmDialog.querySelector('video').pause());
 filmDialog.addEventListener('cancel',()=>filmDialog.querySelector('video').pause());
 window.addEventListener('xim:speech-start',()=>{if(active||playback)stop(true);});
-let liveUsers=new Map(),liveReplies=new Map();
+const liveUsers=new Map(),liveReplies=new Map(),livePlayed=new Set(),liveEntries=new Set();
+const audioKey=d=>JSON.stringify([d.run_id,d.turn_id]);
+function resetLiveLog(){liveUsers.clear();liveReplies.clear();livePlayed.clear();liveEntries.clear();}
 window.addEventListener('xim:voice-closed',()=>{
-  cancelPlayback('voice_closed');liveUsers.clear();liveReplies.clear();
+  cancelPlayback('voice_closed');
   $('state').textContent='我在这里';delete pet.dataset.activity;
 });
 window.addEventListener('xim:transcript',e=>{if(e.detail.trim())send(e.detail.trim());});
 window.addEventListener('xim:voice-ready',()=>{
-  if(window.ximVoice?.live)stop(true);
+  if(window.ximVoice?.live){stop(true);resetLiveLog();}
   else prepareSpeech();
   voice=true;$('mute').textContent='声音开启';$('mute').setAttribute('aria-pressed','true');
 });
 const trimCards=map=>{for(const [key,entry] of map)if(!entry.isConnected)map.delete(key);};
-window.addEventListener('xim:live-event',({detail:{action,data}})=>{
-  const {text,turn,run_id,turn_id}=data;
+function rememberLive(entry){for(const item of liveEntries)if(!item.isConnected)liveEntries.delete(item);liveEntries.add(entry);}
+window.addEventListener('xim:live-played',({detail:data})=>{
+  const id=audioKey(data);livePlayed.add(id);
+  if(livePlayed.size>100)livePlayed.delete(livePlayed.values().next().value);
+  const entry=liveReplies.get(id);if(entry)entry.dataset.liveHeard='';
+});
+window.addEventListener('xim:live-recover',({detail:{id,text}})=>{
+  if(!boot||active)return;
+  const user=liveUsers.get(id);if(!user?.isConnected)return;
+  let node;
+  for(const entry of messages.children){
+    if(entry===user)break;
+    if(!liveEntries.has(entry))continue;
+    const line=entry.querySelector('p')?.textContent?.trim();if(!line)continue;
+    if(entry.classList.contains('user'))node=dialogue.begin(line);
+    else if(node&&entry.hasAttribute('data-live-heard'))dialogue.complete(node,[node.reply,line].filter(Boolean).join(' ').slice(0,2000),false);
+  }
+  resetLiveLog();prepareSpeech();run({text,user});
+});
+window.addEventListener('xim:live-event',({detail:{action,data,group}})=>{
+  const {text}=data;
   if(action==='input.speech.started'){$('state').textContent='正在听';return;}
   if(action==='response.audio.started'){$('state').textContent='伴点在说';return;}
   if(action==='response.ended'){$('state').textContent='我在这里';}
-  if(action==='input.transcript.done'&&text){
-    if(turn&&liveUsers.has(turn)){liveUsers.get(turn).querySelector('p').textContent=text;return;}
-    const entry=card('user','你',text);append(entry);if(turn)liveUsers.set(turn,entry);trimCards(liveUsers);return;
+  if(action==='input.transcript.done'||action==='input.transcript.revised'){
+    if(!group)return;
+    const old=liveUsers.get(group.id);
+    if(old?.isConnected){old.querySelector('p').textContent=group.text;return;}
+    const entry=card('user','你',group.text);append(entry);rememberLive(entry);
+    liveUsers.set(group.id,entry);trimCards(liveUsers);return;
   }
-  if(action==='input.transcript.revised'&&turn&&text){const p=liveUsers.get(turn)?.querySelector('p');if(p)p.textContent=text;return;}
-  const id=JSON.stringify([run_id,turn_id]);
+  const id=audioKey(data);
   const interrupted=action==='response.interrupted';
   if(action==='response.audio.stop'||(action==='response.ended'&&data.status!=='completed')){
     const entry=liveReplies.get(id);if(entry){entry.dataset.stopped='';entry.querySelector('small').textContent='伴点 · 已停播';}
@@ -301,8 +324,8 @@ window.addEventListener('xim:live-event',({detail:{action,data}})=>{
   if(!['output.transcript.updated','output.transcript.done','response.interrupted'].includes(action))return;
   let entry=liveReplies.get(id);
   if(entry?.hasAttribute('data-stopped')&&!interrupted)return;
-  if(!entry){if(!text)return;entry=card('assistant','伴点',text);liveReplies.set(id,entry);append(entry);trimCards(liveReplies);}
+  if(!entry){if(!text)return;entry=card('assistant','伴点',text);liveReplies.set(id,entry);append(entry);rememberLive(entry);trimCards(liveReplies);if(livePlayed.has(id))entry.dataset.liveHeard='';}
   const p=entry.querySelector('p');p.textContent=text||'';
-  if(interrupted){entry.dataset.stopped='';entry.querySelector('small').textContent='伴点 · 已让你先说';lastSubtitle=text||'你先说，我在听。';subtitle(lastSubtitle);}
+  if(interrupted){entry.dataset.stopped='';if(text)entry.dataset.liveHeard='';entry.querySelector('small').textContent='伴点 · 已让你先说';lastSubtitle=text||'你先说，我在听。';subtitle(lastSubtitle);}
   else if(text){lastSubtitle=text;subtitle(text);}
 });

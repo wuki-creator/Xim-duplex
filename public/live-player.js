@@ -18,15 +18,18 @@ export class LivePlayer{
   speakFrame(bytes){
     const d=this.pending;this.pending=null;
     if(!d||!bytes.byteLength||bytes.byteLength%2)throw Error('Invalid audio frame');
-    const run=this.run(d);if(run.closed)return;
-    const context=this.context,start=Math.max(context.currentTime+.055,this.tail);
+    const run=this.run(d);if(run.closed)return null;
+    const context=this.context,now=context.currentTime;
+    const start=this.tail>now+.008?this.tail:now+.045;
     const view=new DataView(bytes),buffer=context.createBuffer(1,bytes.byteLength/2,d.sampleRate),samples=buffer.getChannelData(0);
     for(let i=0;i<samples.length;i++)samples[i]=view.getInt16(i*2,true)/32768;
     if(start+buffer.duration-context.currentTime>20)throw Error('Audio backlog');
     const source=context.createBufferSource();source.buffer=buffer;source.connect(this.gain);
+    source.onended=()=>this.confirm();
     run.chunks.push({source,start,end:start+buffer.duration,id:d.chunk_id});
-    this.tail=start+buffer.duration;source.start(start);
+    this.tail=start+buffer.duration;source.start(start);return d;
   }
+  get playing(){return [...this.runs.values()].some(run=>!run.closed&&run.chunks.length>0);}
   position(){
     const ctx=this.context,clock=ctx.getOutputTimestamp?.();
     return clock?.performanceTime>0?Math.min(ctx.currentTime,clock.contextTime):Math.max(0,ctx.currentTime-(ctx.baseLatency||0)-(ctx.outputLatency||0));

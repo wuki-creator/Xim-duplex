@@ -5,6 +5,7 @@ import {connectLive} from '../moss-live.mjs';
 import {pcmWav,synthesizeMoss,transcribeMoss} from '../moss-models.mjs';
 import {getModelReply} from '../model-reply.mjs';
 import {LivePlayer} from '../public/live-player.js';
+import {LiveTurns} from '../public/live-turns.js';
 
 test('live relays microphone audio only after setup and acknowledges known playback', t=>{
   const sent=[],client=[],upstream=new EventEmitter();
@@ -47,9 +48,41 @@ test('browser playback waits for its output clock and drops queued chunks on int
   context.currentTime=1.23;output=1.197;
   player.event('response.audio.stop',ids);
   assert.deepEqual(acks.map(({action,chunk_id})=>[action,chunk_id]),[['playback.chunk.completed','1'],['playback.stopped',undefined]]);
-  assert.equal(acks[1].played_audio_ms,42);
+  assert.ok(acks[1].played_audio_ms>=51&&acks[1].played_audio_ms<=52);
   assert.ok(sources[1].stopped&&sources[2].stopped);
   player.event('response.interrupted',ids);player.confirm(10);assert.equal(acks.length,2);
+});
+
+test('live follows natural pauses and revisions without losing or repeating the user turn',()=>{
+  const turns=new LiveTurns();turns.start();turns.stop(100);
+  assert.deepEqual(turns.confirm({turn:'one',text:'我今天'},120),{id:1,text:'我今天'});
+  turns.start();assert.equal(turns.take(7000,{automatic:true}),null);
+  turns.stop(7050);
+  assert.deepEqual(turns.confirm({turn:'two',text:'有点开心'},7100),{id:1,text:'我今天 有点开心'});
+  assert.deepEqual(turns.confirm({turn:'one',text:'我昨天'},7120,true),{id:1,text:'我昨天 有点开心'});
+  assert.equal(turns.take(8500),null);
+  assert.equal(turns.take(13620,{automatic:true}).text,'我昨天 有点开心');
+  assert.equal(turns.take(16000),null);
+});
+
+test('a reply can speak before the final caption; a late chunk cannot satisfy the next turn',()=>{
+  const turns=new LiveTurns(),old={run_id:'r1',turn_id:'assistant-1'};
+  turns.start();turns.associate(old);turns.audio(old);
+  turns.stop(500);turns.confirm({turn:'one',text:'你能陪我说说吗'},600);
+  assert.equal(turns.take(9000,{automatic:true}),null);
+  turns.start();turns.stop(9100);turns.confirm({turn:'two',text:'不是工作，是家里的事'},9200);
+  turns.audio(old);
+  assert.equal(turns.take(15800,{automatic:true}).text,'不是工作，是家里的事');
+});
+
+test('backchannels and explicit pauses do not trigger automatic takeover',()=>{
+  for(const text of ['嗯嗯','我知道了','让我想想','先别说，我还没说完','等一下，我想想']){
+    const turns=new LiveTurns();turns.start();turns.stop(100);turns.confirm({turn:'one',text},110);
+    assert.equal(turns.take(12000,{automatic:true}),null);
+    assert.equal(turns.take(12000).text,text);
+  }
+  const greeting=new LiveTurns();greeting.start();greeting.stop(100);greeting.confirm({turn:'one',text:'你在吗'},110);
+  assert.equal(greeting.take(12000,{automatic:true}).text,'你在吗');
 });
 
 test('MOSS multipart ASR keeps anonymous multi-speaker responses out of conversation',async()=>{
