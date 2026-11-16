@@ -1,0 +1,5 @@
+# Python 3.11/3.12, isolated environment. No model is fetched at inference time.
+numpy==2.3.4
+scipy==1.16.3
+onnxruntime==1.23.2
+transformers==4.57.1

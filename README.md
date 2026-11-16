@@ -8,6 +8,8 @@
 
 **[查看当前模型流程图与打断续接时序 →](docs/MODEL_FLOW.md)** · [原生全双工改造方案](docs/DUPLEX_ARCHITECTURE.md)
 
+v0.9.3 已接入自托管 Smart Turn v3.2 判断句尾、有限交互状态与下一段语音预取；[世界模型路线与实际边界](docs/WORLD_MODEL_PLAN.md)说明已运行组件和待训练网络的区别。
+
 **自托管产品路线。** 不调用 MOSS 或 DeepSeek 云 API。主对话、[会议空间与物理工作台](docs/WORKBENCH_AND_MEETING.md)共用 Xim 的收音链路；当前这台机器使用服务器 Whisper + 自托管语言模型 + MOSS Nano 本地语音，语音服务不可用时回退设备朗读。新增 Xim 条件残差层，尚无已训练的适配器权重；状态与限制见[模型架构](docs/XIM_MOSS_ARCHITECTURE.md)。
 
 已在当前服务器部署 Qwen2.5-1.5B-Instruct 和 MOSS Nano 语音基线，聊天与合成麦克风测试通过；小模型的复杂会议方案尚不稳定，[验证记录](docs/VALIDATION.md)保留失败结果。图像模型和语音适配器训练尚未完成；AISHELL-3 仅准备了 30 条开发样本，研究参考音色的商业使用需进一步核实授权。[自主技术路线和研发边界](docs/MODEL_STRATEGY.md)区分自有交互算法、第三方基础组件与待训练模型。
@@ -16,11 +18,14 @@
 flowchart LR
     MIC[持续收音] --> VAD[能量 VAD]
     VAD --> ASR[SSH → Whisper Small 整句识别]
-    ASR --> STATE[对话事件树]
+    VAD --> TURN[Smart Turn 话轮预测]
+    ASR --> GATE[语句合并与接话判断]
+    TURN --> GATE
+    GATE --> STATE[对话事件树与有限状态]
     TEXT[文字输入] --> STATE
     STATE --> LLM[自托管语言模型]
     LLM --> UI[情绪文字 / Three.js]
-    LLM --> TTS[短段系统朗读]
+    LLM --> TTS[MOSS Nano短段合成与下一段预取]
     TTS -->|播放确认| STATE
     VAD -->|插话停播| TTS
 ```

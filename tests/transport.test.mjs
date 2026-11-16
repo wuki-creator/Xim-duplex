@@ -18,7 +18,7 @@ test('voice transport authenticates and preserves successive speech until the us
   });
   asr.listen(0,'127.0.0.1');await once(asr,'listening');
   const free=net.createServer();free.listen(0,'127.0.0.1');await once(free,'listening');const port=free.address().port;await new Promise(r=>free.close(r));
-  const app=spawn(process.execPath,['server.mjs'],{cwd:new URL('..',import.meta.url),env:{...process.env,PORT:String(port),ASR_URL:'http://127.0.0.1:'+asr.address().port,DEEPSEEK_API_KEY:'',XIM_CONFIG:'missing-test-config.json'},stdio:['ignore','pipe','pipe']});
+  const app=spawn(process.execPath,['server.mjs'],{cwd:new URL('..',import.meta.url),env:{...process.env,XIM_TURN_URL:"",PORT:String(port),ASR_URL:'http://127.0.0.1:'+asr.address().port,DEEPSEEK_API_KEY:'',XIM_CONFIG:'missing-test-config.json'},stdio:['ignore','pipe','pipe']});
   let sockets=[];t.after(async()=>{for(const s of sockets)s.terminate();app.kill();asr.closeAllConnections();await new Promise(r=>asr.close(r));});
   await once(app.stdout,'data');
   const base='http://127.0.0.1:'+port;

@@ -10,6 +10,7 @@ import {VadSegmenter} from './voice-policy.mjs';
 import {interpretWorkbench,computeWorld,generateWorkbenchImage} from './workbench.mjs';
 import {MeetingService,MeetingError} from './meeting.mjs';
 import {localChat,localSpeech,loopbackUrl} from './local-models.mjs';
+import {predictTurn,TurnReleaseGate} from './turn-completion.mjs';
 const root=path.dirname(fileURLToPath(import.meta.url)),port=Number(process.env.PORT||8788);
 let asrConfig={};
 try {asrConfig=JSON.parse(await fs.readFile(path.join(root,'private/asr.json'),'utf8'));}catch{}
@@ -25,7 +26,9 @@ const localVoice=process.env.XIM_LOCAL_VOICE||localConfig.tts_voice||'default';
 const localTtsModel=process.env.XIM_LOCAL_TTS_MODEL||localConfig.tts_model||'';
 const localImageUrl=process.env.XIM_LOCAL_IMAGE_URL||localConfig.image_url||'';
 const localImageModel=process.env.XIM_LOCAL_IMAGE_MODEL||localConfig.image_model||'';
-for(const url of [asrURL,localChatUrl,localTtsUrl,localImageUrl].filter(Boolean))loopbackUrl(url,'/');
+let turnConfig={};try{turnConfig=JSON.parse(await fs.readFile(path.join(root,'private/turn-model.json'),'utf8'));}catch{}
+const turnUrl=process.env.XIM_TURN_URL??turnConfig.url??'';
+for(const url of [asrURL,localChatUrl,localTtsUrl,localImageUrl,turnUrl].filter(Boolean))loopbackUrl(url,'/');
 let workbenchBusy=0,imageBusy=false;
 const meeting=new MeetingService({url:localChatUrl,model:localChatModel,remote:computeRemote});
 const token=crypto.randomBytes(32).toString('hex'),replies=new Map(),rate=[];
@@ -40,9 +43,9 @@ const server=http.createServer(async(req,res)=>{
   if(!allowed.has(req.headers.host))return send(res,403,{error:'ACCESS_DENIED'});
   const url=new URL(req.url,'http://localhost');
   if(req.method==='GET'&&url.pathname==='/api/bootstrap'){
-    const asr=await fetch(asrURL+'/health',{signal:AbortSignal.timeout(1000)}).then(r=>r.json()).catch(()=>({ready:false}));
-    const chat=localChatUrl?await fetch(loopbackUrl(localChatUrl,'/health'),{signal:AbortSignal.timeout(1000)}).then(r=>r.json()).catch(()=>({ready:false})):{};
-    return send(res,200,{token,configured:Boolean(localChatUrl&&localChatModel&&chat.ready===true),model:localChatModel||null,emotions,asrReady:asr.ready===true,asrModel:asr.model||null,voiceLive:false,voiceMode:'cascade',voiceEngine:'xim-cascade',cloudAsr:false,serverTts:Boolean(localTtsUrl&&localTtsModel),speechChunkLength:localTtsModel==='xim-moss-nano'?14:72,imageReady:Boolean(localImageUrl&&localImageModel),version:'0.9.2',policy:styles.id});
+    const health=url=>url?fetch(loopbackUrl(url,'/health'),{signal:AbortSignal.timeout(1000)}).then(r=>r.ok?r.json():{}).catch(()=>({ready:false})):Promise.resolve({});
+    const [asr,chat,turn]=await Promise.all([health(asrURL),health(localChatUrl),health(turnUrl)]);
+    return send(res,200,{token,configured:Boolean(localChatUrl&&localChatModel&&chat.ready===true),model:localChatModel||null,emotions,asrReady:asr.ready===true,asrModel:asr.model||null,turnReady:turn.ready===true,turnModel:turn.ready===true?turn.model:null,voiceLive:false,voiceMode:'cascade',voiceEngine:'xim-cascade',cloudAsr:false,serverTts:Boolean(localTtsUrl&&localTtsModel),speechChunkLength:localTtsModel==='xim-moss-nano'?14:72,imageReady:Boolean(localImageUrl&&localImageModel),version:'0.9.3',policy:styles.id});
   }
   if(url.pathname.startsWith('/api/')){
     if(req.method!=='POST'||req.headers['x-bandi-token']!==token||!String(req.headers['content-type']).startsWith('application/json')||
@@ -127,7 +130,7 @@ const server=http.createServer(async(req,res)=>{
     }
     return send(res,404,{error:'NOT_FOUND'});
   }
-  const assets=new Set(['index.html','app.js','dialogue-state.js','room.css','style.css','robot3d.js','voice-client.js','capture-worklet.js','workbench.html','workbench.css','workbench.js','world.js','meeting.html','meeting.css','meeting-ui.js','vendor/cannon-es.js','vendor/three.module.js','vendor/three.core.js','media/xim-demo.mp4','media/poster.png']);
+  const assets=new Set(['index.html','app.js','speech-queue.js','dialogue-state.js','room.css','style.css','robot3d.js','voice-client.js','capture-worklet.js','workbench.html','workbench.css','workbench.js','world.js','meeting.html','meeting.css','meeting-ui.js','vendor/cannon-es.js','vendor/three.module.js','vendor/three.core.js','media/xim-demo.mp4','media/poster.png']);
   const name=url.pathname==='/'?'index.html':url.pathname.slice(1);
   if(!assets.has(name)||!['GET','HEAD'].includes(req.method))return send(res,404,{error:'NOT_FOUND'});
   const bytes=await fs.readFile(name==='vendor/cannon-es.js'?path.join(root,'node_modules/cannon-es/dist/cannon-es.js'):path.join(root,'public',name));
@@ -154,17 +157,24 @@ server.on('upgrade',(req,socket,head)=>{
 wss.on('connection',ws=>{
   let authorized=false,closed=false,last=Date.now(),current=null,seq=0;
   const output=data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));};
-  const pendingAudio=[],recognized=[];let recognizing=false;
-  const vad=new VadSegmenter({onStart:()=>{seq++;output({type:'speech.start',seq});},onEnd:pcm=>{
+  const pendingAudio=[],recognized=[];let recognizing=false,forceRelease=false;
+  const gate=new TurnReleaseGate({canRelease:()=>!closed&&!recognizing&&!vad.active&&!pendingAudio.length&&recognized.length>0,onRelease:()=>{
+    const missed=recognized.find(item=>!item.text.trim());
+    output({type:'transcript',text:missed?'':recognized.map(item=>item.text).join(' ').slice(0,2000),reason:missed?.reason||null,seq});
+    recognized.length=0;forceRelease=false;
+  }});
+  const vad=new VadSegmenter({onStart:()=>{gate.cancel();forceRelease=false;seq++;output({type:'speech.start',seq});},onEnd:pcm=>{
     output({type:'speech.end',seq,durationMs:Math.round(pcm.length/32)});
     if(pendingAudio.length>=3){output({type:'error',message:'识别暂时跟不上，请稍后重连或使用文字。'});ws.close(1013,'Recognition backlog');return;}
-    pendingAudio.push(pcm);void transcribePending();
+    pendingAudio.push({pcm,forced:forceRelease});void transcribePending();
   }});
   async function transcribePending(){
    if(recognizing||closed)return;
    recognizing=true;let failed=false;
    while(pendingAudio.length&&!closed){
-    const pcm=pendingAudio.shift(),controller=new AbortController();current=controller;
+    const {pcm,forced}=pendingAudio.shift(),controller=new AbortController();current=controller;
+    // Run acoustic turn prediction alongside ASR, not as a second LLM call.
+    const boundary=forced?Promise.resolve(null):predictTurn({url:turnUrl,pcm,signal:controller.signal});
     let timedOut=false;const timer=setTimeout(()=>{timedOut=true;controller.abort();},20000);
     try{
       let response;
@@ -177,21 +187,18 @@ wss.on('connection',ws=>{
         if(!response.ok)throw Error('asr');
         result=await response.json();
       }
-      if(!closed)recognized.push({text:typeof result.text==='string'?result.text.slice(0,2000):'',reason:['no_match','low_confidence','overlap'].includes(result.reason)?result.reason:'no_match'});
+      const turn=await boundary;
+      if(!closed)recognized.push({text:typeof result.text==='string'?result.text.slice(0,2000):'',complete:forced?true:turn?.complete,reason:['no_match','low_confidence','overlap'].includes(result.reason)?result.reason:'no_match'});
     }catch{
-      failed=true;pendingAudio.length=0;recognized.length=0;
+      failed=true;gate.cancel();pendingAudio.length=0;recognized.length=0;
       if(!closed&&(!controller.signal.aborted||timedOut))output({type:'error',message:timedOut?'语音识别超时，请重试或使用文字对话。':'语音识别暂不可用，请使用文字对话。'});
       break;
     }
     finally{clearTimeout(timer);}
    }
    recognizing=false;
-   if(!closed&&!failed&&!vad.active&&recognized.length){
-     // Preserve every completed user segment. Never answer while a later segment is still being spoken.
-     const missed=recognized.find(item=>!item.text.trim());
-     output({type:'transcript',text:missed?'':recognized.map(item=>item.text).join(' ').slice(0,2000),reason:missed?.reason||null,seq});
-     recognized.length=0;
-   }
+   // A short hesitation can join the next utterance; silence is bounded to avoid a stuck conversation.
+   if(!failed)gate.update(forceRelease||recognized.some(item=>!item.text.trim())?true:recognized.at(-1)?.complete);
   }
   const authTimer=setTimeout(()=>{if(!authorized)ws.close(1008,'Authentication required');},5000);
   const idle=setInterval(()=>{if(Date.now()-last>30000)ws.close(1000,'Idle');},10000);
@@ -210,7 +217,7 @@ wss.on('connection',ws=>{
     if(!binary){
       try{
         const message=JSON.parse(data);
-        if(message.type==='speech.finish'){if(!vad.finish())output({type:'no_speech'});return;}
+        if(message.type==='speech.finish'){forceRelease=true;gate.cancel();if(!vad.finish()){if(recognized.length)gate.update(true);else if(!recognizing)output({type:'no_speech'});}return;}
         if(message.type==='sensitivity'&&Number.isFinite(message.threshold)&&message.threshold>=.004&&message.threshold<=.04){vad.threshold=message.threshold;return;}
       }catch{}
       return ws.close(1008,'Invalid control');
@@ -219,7 +226,7 @@ wss.on('connection',ws=>{
     if(ws.bufferedAmount>128000)return ws.close(1013,'Slow connection');
     vad.push(data);
   });
-  ws.on('close',()=>{closed=true;clearTimeout(authTimer);clearInterval(idle);current?.abort();vad.reset();});
+  ws.on('close',()=>{closed=true;gate.cancel();clearTimeout(authTimer);clearInterval(idle);current?.abort();vad.reset();});
   ws.on('error',()=>ws.close());
 });
 server.listen(port,'127.0.0.1',()=>console.log('Xim Duplex http://127.0.0.1:'+port));

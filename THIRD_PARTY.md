@@ -10,6 +10,7 @@
 | Paramiko | SSH 加密转发，独立安装 | https://github.com/paramiko/paramiko ，按上游许可使用；本仓库不分发其包 |
 | 系统语音合成 | 浏览器 SpeechSynthesis | 声音可用性与服务条款由浏览器/系统决定 |
 | Qwen2.5-1.5B-Instruct | 自托管文本模型候选，权重独立下载，不随仓库分发 | https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct ，模型卡标注 Apache-2.0；记录模型 revision 和权重校验值 |
+| Smart Turn v3.2 | 自托管声学话轮结束判断，权重独立下载 | https://huggingface.co/pipecat-ai/smart-turn-v3 ，BSD-2-Clause；完整许可见 `scripts/SMART_TURN_LICENSE`，固定版本与摘要见 `docs/WORLD_MODEL_PLAN.md` |
 
 按用户新要求，本版本提供自部署 OpenMOSS Nano 语音适配器；模型参数与上游代码独立下载，不随本仓库分发。来源和权重摘要见 [架构记录](docs/XIM_MOSS_ARCHITECTURE.md)。不读取旧的 `private/moss.json`，也不使用旧的 `MOSS_*` 云接口配置；私有研究文件和数据不随本仓库分发。
 

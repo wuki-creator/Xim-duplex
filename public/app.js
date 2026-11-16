@@ -1,4 +1,5 @@
 import {DialogueState,speechChunks} from './dialogue-state.js';
+import {runSpeechQueue} from './speech-queue.js';
 const dialogue=new DialogueState();
 const $ = id => document.getElementById(id);
 const messages = $('messages'), input = $('input'), pet = $('pet');
@@ -37,35 +38,36 @@ function cancelPlayback(reason='user_speech'){
 function speak(node,answer,reply){
   const cloud=Boolean(boot?.serverTts&&speechContext?.state==='running');
   const epoch=++playbackEpoch,chunks=speechChunks(node.reply,cloud?(boot.speechChunkLength||72):36),controller=new AbortController();
-  let cloudFailed=false;
   playback={node,label:answer.querySelector('small'),controller};
-  const next=async index=>{
-    if(epoch!==playbackEpoch)return;
-    const chunk=chunks[index];
-    if(!chunk){playback=null;return;}
-    if(!chunk.text.trim()){dialogue.acknowledge(node,chunk.end);void next(index+1);return;}
-    if(cloud&&!cloudFailed){
-      try{
-        const res=await fetch('/api/speech',{method:'POST',headers:{'Content-Type':'application/json','X-Bandi-Token':boot.token},body:JSON.stringify({id:reply.id,offset:chunk.start,end:chunk.end}),signal:controller.signal});
-        if(!res.ok)throw Error('Speech unavailable');
-        const buffer=await speechContext.decodeAudioData(await res.arrayBuffer());
-        if(epoch!==playbackEpoch)return;
-        const source=speechContext.createBufferSource();source.buffer=buffer;source.connect(speechContext.destination);playback.source=source;
-        source.onended=()=>{source.disconnect();if(epoch===playbackEpoch){dialogue.acknowledge(node,chunk.end);void next(index+1);}};
-        source.start();return;
-      }catch{if(epoch!==playbackEpoch)return;cloudFailed=true;}
-    }
-    if(!window.speechSynthesis){cancelPlayback('playback_error');note('语音暂时不可用，文字回复已保留。');return;}
+  const load=cloud?async(chunk,signal)=>{
+    const res=await fetch('/api/speech',{method:'POST',headers:{'Content-Type':'application/json','X-Bandi-Token':boot.token},body:JSON.stringify({id:reply.id,offset:chunk.start,end:chunk.end}),signal});
+    if(!res.ok)throw Error('Speech unavailable');
+    return speechContext.decodeAudioData(await res.arrayBuffer());
+  }:null;
+  const play=(buffer,chunk,signal)=>new Promise((resolve,reject)=>{
+    const source=speechContext.createBufferSource();source.buffer=buffer;source.connect(speechContext.destination);playback.source=source;
+    const cleanup=()=>{source.onended=null;source.disconnect();signal.removeEventListener('abort',abort);};
+    const abort=()=>{cleanup();try{source.stop();}catch{}reject(Error('Playback cancelled'));};
+    source.onended=()=>{cleanup();resolve();};
+    signal.addEventListener('abort',abort,{once:true});
+    try{source.start();}catch(error){cleanup();reject(error);}
+  });
+  const fallback=(chunk,signal)=>new Promise((resolve,reject)=>{
+    if(!window.speechSynthesis){reject(Error('Speech unavailable'));return;}
     let offset=0,emotion='warm';
     for(const seg of reply.segments){offset+=seg.text.length+1;if(chunk.start<offset){emotion=seg.emotion;break;}}
     const utterance=new SpeechSynthesisUtterance(chunk.text);utterance.lang='zh-CN';
     [utterance.rate,utterance.pitch]=prosody[emotion]||prosody.warm;
-    utterance.onboundary=event=>{if(epoch===playbackEpoch)dialogue.acknowledge(node,chunk.start+event.charIndex);};
-    utterance.onend=()=>{if(epoch===playbackEpoch){dialogue.acknowledge(node,chunk.end);next(index+1);}};
-    utterance.onerror=()=>{if(epoch===playbackEpoch){cancelPlayback('playback_error');note('朗读中断，文字回复已保留。');}};
-    window.speechSynthesis.speak(utterance);
-  };
-  next(0);
+    const cleanup=()=>{utterance.onend=null;utterance.onerror=null;signal.removeEventListener('abort',abort);};
+    const abort=()=>{cleanup();window.speechSynthesis.cancel();reject(Error('Playback cancelled'));};
+    utterance.onend=()=>{cleanup();resolve();};
+    utterance.onerror=()=>{cleanup();reject(Error('Speech unavailable'));};
+    signal.addEventListener('abort',abort,{once:true});
+    try{window.speechSynthesis.speak(utterance);}catch(error){cleanup();reject(error);}
+  });
+  void runSpeechQueue({chunks,load,play,fallback,acknowledge:chunk=>dialogue.acknowledge(node,chunk.end),signal:controller.signal,isCurrent:()=>epoch===playbackEpoch})
+    .then(result=>{if(epoch===playbackEpoch&&result.status==='complete')playback=null;})
+    .catch(()=>{if(epoch===playbackEpoch){cancelPlayback('playback_error');note('朗读中断，文字回复已保留。');}});
 }
 
 const note = (text='') => { $('error').textContent = text; };

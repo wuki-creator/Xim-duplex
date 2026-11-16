@@ -2,6 +2,8 @@
 
 更新：2026-11-16。用户要求借鉴 MOSS、使用公开参数，并设计有区别的算法。这里区分原模型、Xim 新增代码和尚未完成的训练，不把模型改名等同于从零开发。
 
+v0.9.3 新增自托管 Smart Turn 话轮预测、有限交互状态和单段语音预取。实际链路与待训练的动作条件世界模型分开记录在[世界模型路线](WORLD_MODEL_PLAN.md)。
+
 ## 公开架构
 
 - [MOSS-TTS-Nano](https://github.com/OpenMOSS/MOSS-TTS-Nano) 使用音频 tokenizer 与自回归文本/音频 token 生成；[MOSS-Audio-Tokenizer-Nano](https://huggingface.co/OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano) 将音频映射为低帧率离散代码并解码。

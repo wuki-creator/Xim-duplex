@@ -1,8 +1,8 @@
 # Xim Duplex 当前模型与对话流程
 
-更新时间：2026-11-16 · 代码版本：v0.9.2
+更新时间：2026-11-16 · 代码版本：v0.9.3
 
-现行产品不调用 MOSS 云 API。当前主对话链路是 Xim 收音与打断管理 → 自部署 Whisper → 自托管语言模型 → 本地 MOSS Nano 语音，服务不可用时回退设备朗读。语音参数与独立算法的区别见 [Xim MOSS 架构](XIM_MOSS_ARCHITECTURE.md)，实际启用状态以服务配置和验证记录为准。
+现行产品不调用 MOSS 云 API。当前主对话链路是 Xim 收音与打断管理 → 自部署 Whisper + Smart Turn 话轮判断 → 有限交互状态 → 自托管语言模型 → 本地 MOSS Nano 语音，服务不可用时回退设备朗读。语音参数与独立算法的区别见 [Xim MOSS 架构](XIM_MOSS_ARCHITECTURE.md)，实际启用状态以服务配置和验证记录为准。
 
 工作台与会议空间使用自托管语言模型处理结构化任务，由 Xim 检查方案、确认和执行状态。详细操作与验证边界见 [使用指南](WORKBENCH_AND_MEETING.md)。
 
@@ -36,14 +36,17 @@ flowchart TD
     VAD -->|按序保留完整语句| TUNNEL[回环接口 + SSH 加密通道]
     TUNNEL --> ASR[服务器 Whisper Small<br/>CPU INT8 · 8 线程 · 整句识别]
     ASR -->|空结果 / 低置信度| FAIL[提示识别失败<br/>保持文字入口]
-    ASR -->|最终文字| TURN[对话事件树<br/>用户意图、父节点、打断状态]
+    VAD --> ENDPOINT[Smart Turn v3.2 句尾预测]
+    ENDPOINT --> GATE[并行识别后判断接话，未完最多等1400ms]
+    ASR --> GATE
+    GATE -->|最终文字| TURN[对话事件树<br/>用户意图、父节点、打断状态]
     TEXT --> TURN
     TURN --> CTX[构建上下文<br/>已播放前缀 + 新输入 + 打断信息]
     CTX --> LLM[本地文本模型<br/>整段文本生成]
-    LLM --> JSON[解析情绪段落<br/>结构异常时重试纯文字]
+    LLM --> JSON[解析情绪段落<br/>可读纯文字兼容，破损结构返回失败]
     JSON --> UI[对话气泡与情绪文字色]
     JSON --> PET[Three.js 角色表情]
-    JSON --> CHUNK[短段朗读队列]
+    JSON --> CHUNK[短段朗读队列，播放时预取下一段]
     CHUNK --> TTS[本地 MOSS Nano / 浏览器朗读回退]
     TTS --> OUT[扬声器 / 耳机]
     TTS -->|boundary / end| ACK[确认播放位置<br/>无 boundary 时按完整短段确认]
@@ -102,16 +105,7 @@ flowchart LR
 
 ## 4. 拟升级架构：尚未部署
 
-MOSS-Live 路线已通过真实接口的两轮合成音频测试。它不依赖下方自研路线的 ASR、TTS 或轮次模型。
-
-```mermaid
-flowchart LR
-    MIC[持续麦克风输入] --> LIVE[MOSS-Live 实时会话]
-    LIVE -->|字幕快照和最终结果| CHAT[对话气泡]
-    LIVE -->|流式 PCM 音频与打断事件| PLAYER[浏览器播放器]
-    PLAYER -->|已播完成或已停播时长| LIVE
-    PLAYER --> AUDIO[扬声器或耳机]
-```
+当前不使用 MOSS-Live 云接口。新增话轮模型和世界模型研究方案见 [世界模型路线](WORLD_MODEL_PLAN.md)。
 
 ```mermaid
 flowchart TD

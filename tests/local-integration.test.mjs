@@ -23,7 +23,7 @@ test('server uses local chat and local TTS without a cloud key', {timeout:15000}
   worker.listen(0,'127.0.0.1');await once(worker,'listening');
   const probe=http.createServer();probe.listen(0,'127.0.0.1');await once(probe,'listening');const port=probe.address().port;await new Promise(r=>probe.close(r));
   const local='http://127.0.0.1:'+worker.address().port;
-  const app=spawn(process.execPath,['server.mjs'],{cwd:new URL('..',import.meta.url),env:{...process.env,PORT:String(port),XIM_CONFIG:'missing-config',DEEPSEEK_API_KEY:'',ASR_URL:local,XIM_LOCAL_CHAT_URL:local,XIM_LOCAL_CHAT_MODEL:'local-model',XIM_LOCAL_TTS_URL:local,XIM_LOCAL_TTS_MODEL:'test-tts',MOSS_API_KEY:'retired-key-must-be-ignored',XIM_CHAT_PROVIDER:'moss',MOSS_LIVE:'1'},stdio:['ignore','pipe','pipe']});
+  const app=spawn(process.execPath,['server.mjs'],{cwd:new URL('..',import.meta.url),env:{...process.env,XIM_TURN_URL:"",PORT:String(port),XIM_CONFIG:'missing-config',DEEPSEEK_API_KEY:'',ASR_URL:local,XIM_LOCAL_CHAT_URL:local,XIM_LOCAL_CHAT_MODEL:'local-model',XIM_LOCAL_TTS_URL:local,XIM_LOCAL_TTS_MODEL:'test-tts',MOSS_API_KEY:'retired-key-must-be-ignored',XIM_CHAT_PROVIDER:'moss',MOSS_LIVE:'1'},stdio:['ignore','pipe','pipe']});
   t.after(async()=>{app.kill();worker.closeAllConnections();await new Promise(r=>worker.close(r));});
   await once(app.stdout,'data');
   const base='http://127.0.0.1:'+port,boot=await fetch(base+'/api/bootstrap').then(r=>r.json());
@@ -40,7 +40,7 @@ test('a broken local model never falls back to an external API', {timeout:15000}
   worker.listen(0,'127.0.0.1');await once(worker,'listening');
   const probe=http.createServer();probe.listen(0,'127.0.0.1');await once(probe,'listening');const port=probe.address().port;await new Promise(r=>probe.close(r));
   const local='http://127.0.0.1:'+worker.address().port;
-  const app=spawn(process.execPath,['server.mjs'],{cwd:new URL('..',import.meta.url),env:{...process.env,PORT:String(port),DEEPSEEK_API_KEY:'unused-test-key',XIM_LOCAL_CHAT_URL:local,XIM_LOCAL_CHAT_MODEL:'local-model'},stdio:['ignore','pipe','pipe']});
+  const app=spawn(process.execPath,['server.mjs'],{cwd:new URL('..',import.meta.url),env:{...process.env,XIM_TURN_URL:"",PORT:String(port),DEEPSEEK_API_KEY:'unused-test-key',XIM_LOCAL_CHAT_URL:local,XIM_LOCAL_CHAT_MODEL:'local-model'},stdio:['ignore','pipe','pipe']});
   t.after(async()=>{app.kill();worker.closeAllConnections();await new Promise(r=>worker.close(r));});
   await once(app.stdout,'data');const base='http://127.0.0.1:'+port,boot=await fetch(base+'/api/bootstrap').then(r=>r.json());
   const response=await fetch(base+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json','X-Bandi-Token':boot.token},body:JSON.stringify({text:'你好'})});
