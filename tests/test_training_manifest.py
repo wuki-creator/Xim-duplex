@@ -11,6 +11,20 @@ SPEC.loader.exec_module(training)
 
 
 class TrainingManifestTests(unittest.TestCase):
+    def test_pinned_qwen3_8b_has_36_layers_not_32(self):
+        # Official b968826d config: 32 attention heads, but 36 hidden layers.
+        with tempfile.TemporaryDirectory(prefix='xim-base-config-') as directory:
+            base = Path(directory)
+            (base / 'model.safetensors').write_bytes(b'only checks metadata; never loaded')
+            config = {'model_type':'qwen3', 'hidden_size':4096, 'num_hidden_layers':36,
+                      'num_attention_heads':32, 'num_key_value_heads':8}
+            (base / 'config.json').write_text(json.dumps(config), encoding='utf-8')
+            self.assertEqual(training.checked_model_dir(base), base.resolve())
+            config['num_hidden_layers'] = 32
+            (base / 'config.json').write_text(json.dumps(config), encoding='utf-8')
+            with self.assertRaises(ValueError):
+                training.checked_model_dir(base)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix='xim-training-manifest-')
         self.root = Path(self.temporary.name).resolve()

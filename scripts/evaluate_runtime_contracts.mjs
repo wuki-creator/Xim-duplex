@@ -66,7 +66,7 @@ for(const [id,mode] of [['meeting-proposal','proposal'],['meeting-discussion','d
     return service.input(room.id,mode==='proposal'?'林舟，请为明天十分钟的演示制作检查清单':'让林舟和夏禾讨论一下怎么测试语音接话体验',null,config.signal);
   },result=>mode==='proposal'?
     result.tasks.some(task=>task.status==='proposed'&&task.plan.steps.length>0&&task.result===null):
-    result.messages.some(message=>result.participants.some(person=>person.id===message.by))&&result.tasks.length===0);
+    result.participants.every(person=>result.messages.some(message=>message.by===person.id))&&result.tasks.length===0);
 }
 const report={model_name:model,status:'completed',created_at_utc:new Date().toISOString(),health,policy:policy.id,
   source_files:['scripts/evaluate_runtime_contracts.mjs','local-models.mjs','meeting.mjs','workbench.mjs','evolution/active.json'],

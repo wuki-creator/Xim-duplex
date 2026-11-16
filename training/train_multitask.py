@@ -68,7 +68,7 @@ def checked_model_dir(value):
     if not path.is_dir() or not (path / "config.json").is_file():
         raise ValueError("Provide an existing local Qwen3-8B model directory")
     config = json.loads((path / "config.json").read_text(encoding="utf-8"))
-    if config.get("model_type") != "qwen3" or config.get("hidden_size") != 4096 or config.get("num_hidden_layers") != 32:
+    if config.get("model_type") != "qwen3" or config.get("hidden_size") != 4096 or config.get("num_hidden_layers") != 36:
         raise ValueError("This pilot is configured for Qwen3-8B, not an arbitrary 6B/10B model")
     if not list(path.glob("*.safetensors")):
         raise ValueError("Local safetensors model weights are required")
