@@ -1,12 +1,12 @@
 # Xim Duplex 当前模型与对话流程
 
-更新时间：2026-11-16 · 代码版本：v0.9.1
+更新时间：2026-11-16 · 代码版本：v0.9.2
 
-现行产品不调用或微调 MOSS。默认链路是 Xim 收音与打断管理 → 自部署 Whisper → 自托管语言模型 → 设备朗读；三种空间统一使用自己的语音入口。
+现行产品不调用 MOSS 云 API。当前主对话链路是 Xim 收音与打断管理 → 自部署 Whisper → 自托管语言模型 → 本地 MOSS Nano 语音，服务不可用时回退设备朗读。语音参数与独立算法的区别见 [Xim MOSS 架构](XIM_MOSS_ARCHITECTURE.md)，实际启用状态以服务配置和验证记录为准。
 
 工作台与会议空间使用自托管语言模型处理结构化任务，由 Xim 检查方案、确认和执行状态。详细操作与验证边界见 [使用指南](WORKBENCH_AND_MEETING.md)。
 
-主对话可配置独立文本和声音服务，图像生成改为自部署服务接口；见[部署说明](SELF_HOSTED_ROADMAP.md)。这些通用接口已经实现，神经语音和图像模型尚未部署。自主研发与训练边界见[技术路线](MODEL_STRATEGY.md)。
+主对话可配置独立文本和声音服务，图像生成改为自部署服务接口；见[部署说明](SELF_HOSTED_ROADMAP.md)。本机已连接服务器的 Nano 语音，图像模型尚未部署。自主研发与训练边界见[技术路线](MODEL_STRATEGY.md)。
 
 ```mermaid
 flowchart LR
@@ -44,7 +44,7 @@ flowchart TD
     JSON --> UI[对话气泡与情绪文字色]
     JSON --> PET[Three.js 角色表情]
     JSON --> CHUNK[短段朗读队列]
-    CHUNK --> TTS[可替换本地语音 / 浏览器朗读<br/>当前默认设备声音]
+    CHUNK --> TTS[本地 MOSS Nano / 浏览器朗读回退]
     TTS --> OUT[扬声器 / 耳机]
     TTS -->|boundary / end| ACK[确认播放位置<br/>无 boundary 时按完整短段确认]
     ACK --> TURN

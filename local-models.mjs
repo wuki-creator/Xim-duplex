@@ -1,3 +1,4 @@
+import {interruptionIntent,turnPrompts} from './turn-policy.mjs';
 // Xim's local inference boundaries; never send API credentials to a configured URL.
 export function loopbackUrl(value,pathname){
   const u=new URL(value);
@@ -7,8 +8,9 @@ export function loopbackUrl(value,pathname){
 export async function localChat({url,model,text,history,interruption,signal,request=fetch}){
   const prompt='你是伴点，一个温暖、尊重边界的中文桌面伙伴。你必须回应用户的意思，而不是重复用户的原话。语气自然，通常一到两句，用户纠正时接受新意思。不声称执行了外部操作。只输出 JSON：{"segments":[{"text":"你的回应","emotion":"warm"}],"task":null}。例如用户说“今天终于完成了一件事”，回应可以是 {"segments":[{"text":"辛苦啦！完成以后是不是松了一口气？","emotion":"joy"}],"task":null}。emotion 只能用 joy、warm、calm、curious、support、celebrate。';
   const interrupted=interruption&&['playing','generating'].includes(interruption.phase);
+  const intent=interruptionIntent(text,interruption);
   const content=interrupted?JSON.stringify({user_message:text,interruption:{phase:interruption.phase,heard_prefix:typeof interruption.heardPrefix==='string'?interruption.heardPrefix.slice(0,1400):''}}):text;
-  const response=await request(loopbackUrl(url,'/v1/chat/completions'),{method:'POST',redirect:'error',signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({model,messages:[{role:'system',content:prompt+(interrupted?' 用户打断了上一轮，历史中只有已经确认的语音前缀；回应用户最新的纠正。':'')},...history,{role:'user',content}],temperature:.65,max_tokens:320,stream:false})});
+  const response=await request(loopbackUrl(url,'/v1/chat/completions'),{method:'POST',redirect:'error',signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({model,messages:[{role:'system',content:prompt+(interrupted?' 用户打断了上一轮，历史中只有已经确认的语音前缀。'+turnPrompts[intent]:'')},...history,{role:'user',content}],temperature:.65,max_tokens:320,stream:false})});
   if(!response.ok){await response.body?.cancel();throw Error('LOCAL_CHAT_UNAVAILABLE');}
   const result=await response.json(),value=result.choices?.[0]?.message?.content;
   if(typeof value!=='string'||!value.trim()||value.length>10000||result.choices?.[0]?.finish_reason!=='stop')throw Error('LOCAL_CHAT_UNAVAILABLE');
@@ -24,8 +26,9 @@ export async function localChat({url,model,text,history,interruption,signal,requ
 }
 
 // A replaceable local worker contract; no provider demo voices, keys or endpoints.
-export async function localSpeech({url,model,text,voice='default',signal,request=fetch}){
-  const response=await request(loopbackUrl(url,'/v1/audio/speech'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model,input:text,voice,response_format:'wav'}),signal,redirect:'error'});
+export async function localSpeech({url,model,text,voice='default',emotion='warm',signal,request=fetch}){
+  const allowed=new Set(['joy','warm','calm','curious','support','celebrate']);
+  const response=await request(loopbackUrl(url,'/v1/audio/speech'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model,input:text,voice,response_format:'wav',emotion:allowed.has(emotion)?emotion:'warm'}),signal,redirect:'error'});
   if(!response.ok){await response.body?.cancel();throw Error('LOCAL_SPEECH_UNAVAILABLE');}
   const max=4000000,declared=Number(response.headers.get('content-length'));
   if(declared>max){await response.body?.cancel();throw Error('LOCAL_SPEECH_UNAVAILABLE');}

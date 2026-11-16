@@ -16,7 +16,7 @@ test('server uses local chat and local TTS without a cloud key', {timeout:15000}
       res.setHeader('Content-Type','application/json');res.end(JSON.stringify({choices:[{finish_reason:'stop',message:{content:'{"segments":[{"text":"很高兴见到你。","emotion":"joy"}]}'}}]}));return;
     }
     if(req.url==='/v1/audio/speech'){
-      assert.equal(JSON.parse(data).input,'很高兴见到你。');assert.equal(JSON.parse(data).model,'test-tts');res.setHeader('Content-Type','audio/wav');res.end(pcmWav(Buffer.alloc(30)));return;
+      assert.equal(JSON.parse(data).input,'很高兴见到你。');assert.equal(JSON.parse(data).model,'test-tts');assert.equal(JSON.parse(data).emotion,'joy');res.setHeader('Content-Type','audio/wav');res.end(pcmWav(Buffer.alloc(30)));return;
     }
     res.writeHead(404);res.end();
   });

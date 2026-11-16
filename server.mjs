@@ -42,7 +42,7 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&url.pathname==='/api/bootstrap'){
     const asr=await fetch(asrURL+'/health',{signal:AbortSignal.timeout(1000)}).then(r=>r.json()).catch(()=>({ready:false}));
     const chat=localChatUrl?await fetch(loopbackUrl(localChatUrl,'/health'),{signal:AbortSignal.timeout(1000)}).then(r=>r.json()).catch(()=>({ready:false})):{};
-    return send(res,200,{token,configured:Boolean(localChatUrl&&localChatModel&&chat.ready===true),model:localChatModel||null,emotions,asrReady:asr.ready===true,asrModel:asr.model||null,voiceLive:false,voiceMode:'cascade',voiceEngine:'xim-cascade',cloudAsr:false,serverTts:Boolean(localTtsUrl&&localTtsModel),imageReady:Boolean(localImageUrl&&localImageModel),version:'0.9.1',policy:styles.id});
+    return send(res,200,{token,configured:Boolean(localChatUrl&&localChatModel&&chat.ready===true),model:localChatModel||null,emotions,asrReady:asr.ready===true,asrModel:asr.model||null,voiceLive:false,voiceMode:'cascade',voiceEngine:'xim-cascade',cloudAsr:false,serverTts:Boolean(localTtsUrl&&localTtsModel),speechChunkLength:localTtsModel==='xim-moss-nano'?14:72,imageReady:Boolean(localImageUrl&&localImageModel),version:'0.9.2',policy:styles.id});
   }
   if(url.pathname.startsWith('/api/')){
     if(req.method!=='POST'||req.headers['x-bandi-token']!==token||!String(req.headers['content-type']).startsWith('application/json')||
@@ -111,7 +111,9 @@ const server=http.createServer(async(req,res)=>{
       const controller=new AbortController();res.on('close',()=>controller.abort());
       try{
         const speechSignal=AbortSignal.any([controller.signal,AbortSignal.timeout(30000)]);
-        const wav=await localSpeech({url:localTtsUrl,model:localTtsModel,text,voice:localVoice,signal:speechSignal});
+        let cursor=0,emotion='warm';
+        for(const segment of entry.segments){const end=cursor+segment.text.length;if(b.offset<end){emotion=segment.emotion;break;}cursor=end+1;}
+        const wav=await localSpeech({url:localTtsUrl,model:localTtsModel,text,voice:localVoice,emotion,signal:speechSignal});
         if(!res.destroyed){res.writeHead(200,{'Content-Type':'audio/wav','Content-Length':wav.length,'Cache-Control':'no-store'});res.end(wav);}
       }catch{return send(res,502,{error:'SPEECH_UNAVAILABLE'});}finally{ttsInflight--;}
       return;

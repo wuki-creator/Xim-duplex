@@ -36,7 +36,7 @@ function cancelPlayback(reason='user_speech'){
 }
 function speak(node,answer,reply){
   const cloud=Boolean(boot?.serverTts&&speechContext?.state==='running');
-  const epoch=++playbackEpoch,chunks=speechChunks(node.reply,cloud?72:36),controller=new AbortController();
+  const epoch=++playbackEpoch,chunks=speechChunks(node.reply,cloud?(boot.speechChunkLength||72):36),controller=new AbortController();
   let cloudFailed=false;
   playback={node,label:answer.querySelector('small'),controller};
   const next=async index=>{

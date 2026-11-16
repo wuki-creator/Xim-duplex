@@ -15,7 +15,7 @@ test('local inference only allows loopback and does not send remote API keys',as
 test('local speech contract accepts only bounded WAV bytes from local worker',async()=>{
   const wav=pcmWav(Buffer.alloc(16));
   const result=await localSpeech({url:'http://localhost:18083',text:'你好',model:'test-tts',voice:'sample',request:async(url,opts)=>{
-    assert.equal(url,'http://localhost:18083/v1/audio/speech');assert.deepEqual(JSON.parse(opts.body),{model:'test-tts',input:'你好',voice:'sample',response_format:'wav'});assert.equal(opts.headers.Authorization,undefined);
+    assert.equal(url,'http://localhost:18083/v1/audio/speech');assert.deepEqual(JSON.parse(opts.body),{model:'test-tts',input:'你好',voice:'sample',response_format:'wav',emotion:'warm'});assert.equal(opts.headers.Authorization,undefined);
     return new Response(wav,{headers:{'Content-Type':'audio/wav'}});
   }});
   assert.deepEqual(result,wav);
