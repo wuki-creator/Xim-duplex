@@ -1,8 +1,8 @@
 # Xim Duplex 当前模型与对话流程
 
-更新时间：2026-11-23 · 代码版本：v0.9.4
+更新时间：2026-11-23 · 代码版本：v0.10.0
 
-现行产品不调用 MOSS 云 API。当前主对话链路是 Xim 收音与打断管理 → 自部署 Whisper + Smart Turn 话轮判断 → 有限交互状态 → 自托管语言模型 → 本地 MOSS Nano 语音，服务不可用时回退设备朗读。语音参数与独立算法的区别见 [Xim MOSS 架构](XIM_MOSS_ARCHITECTURE.md)，实际启用状态以服务配置和验证记录为准。
+现行产品不调用 MOSS 云 API。当前主对话链路是 Xim 持续收音 → 自部署 Whisper＋Smart Turn → 两阶段插话控制与有限交互状态 → 自托管语言模型 → 本地 MOSS Nano 语音，服务不可用时回退设备朗读。讲话开始先 hold，附和或未识别可 resume，纠正／让出／新输入才 cancel。实际启用状态与组件实测见[验证记录](VALIDATION.md)。
 
 工作台与会议空间使用自托管语言模型处理结构化任务，由 Xim 检查方案、确认和执行状态。详细操作与验证边界见 [使用指南](WORKBENCH_AND_MEETING.md)。
 
@@ -51,7 +51,12 @@ flowchart TD
     TTS --> OUT[扬声器 / 耳机]
     TTS -->|boundary / end| ACK[确认播放位置<br/>无 boundary 时按完整短段确认]
     ACK --> TURN
-    VAD -->|speech.start| STOP[取消旧回答请求<br/>停止朗读、撤销未播放队列]
+    VAD -->|speech.start| HOLD[两阶段控制：先暂停播放]
+    ASR -->|附和 / 未识别| RESUME[续播同一代次]
+    ASR -->|纠正 / 让出 / 新输入| STOP[取消旧回答并撤销未播放队列]
+    HOLD --> RESUME
+    HOLD --> STOP
+    RESUME --> CHUNK
     STOP --> TURN
     STOP -.-> LLM
     STOP -.-> CHUNK
@@ -68,6 +73,7 @@ flowchart TD
 sequenceDiagram
     participant U as 用户
     participant V as 语音输入 / VAD
+    participant C as 两阶段控制器
     participant D as 对话状态
     participant L as 自托管语言模型
     participant P as 播放队列
@@ -76,17 +82,22 @@ sequenceDiagram
     L-->>D: 工作让你很累，可以试试……
     D->>P: 排入短段朗读队列
     P-->>D: 确认已播放“工作让你很累”
-    U->>V: 不是工作，是家里的事
-    V->>P: 立即停止并清空未播放队列
-    V->>D: 记录被打断的节点与播放位置
-    V-->>D: 识别完成后的新输入
-    D->>L: 原用户意图 + 已播放前缀 + 新纠正
-    L-->>D: 明白，是家里的事……
-    D->>P: 播放新分支的回答
-    Note over D,P: 旧播放回调失效；未播出的内容不追加进语音历史
+    U->>V: 嗯嗯 / 不是工作，是家里的事
+    V->>C: speech.start
+    C->>P: 先 hold，等待语义分类
+    alt 附和或未识别片段
+        C->>P: resume 同一回答，不创建用户轮次
+    else 纠正、让出或新输入
+        C->>P: cancel，清空未播放队列
+        C->>D: 保留用户意图与已播放前缀
+        D->>L: 最新输入 + 已确认上下文
+        L-->>D: 按新意图回答
+        D->>P: 播放新代次回答
+    end
+    Note over C,P: 输出代次使旧回调与迟到音频失效
 ```
 
-这是应用层的对话事件树。不能将用户对话插入模型内部隐藏推理。播放确认也是浏览器事件估计，不能精确证明用户听到了哪一个音素。当前能量 VAD 仍无法区分“嗯嗯”等附和与真正打断。
+这是应用层的对话事件树和规则分类，不是原生端到端双工模型，也不能将用户对话插入模型内部隐藏推理。播放确认是浏览器事件估计，不能精确证明用户听到了哪一个音素。当前分类依赖最终转写，开放扬声器、背景对话、口音和复杂重叠语音仍需独立实测。
 
 ## 3. 当前递归改进范围
 

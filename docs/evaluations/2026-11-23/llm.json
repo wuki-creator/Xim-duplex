@@ -1,0 +1,71 @@
+{
+  "schema": "xim-component-eval-v1",
+  "component": "llm",
+  "started_at_utc": "2026-11-23T08:38:22.700206+00:00",
+  "host": "biomap-a100-roce-0018",
+  "execution": "sequential",
+  "results": {
+    "health": {
+      "ready": true,
+      "model": "xim-chat-v1",
+      "base_model": "Qwen/Qwen3-8B",
+      "adapter": true,
+      "thinking_enabled": false,
+      "offline": true,
+      "adapter_stage": "sft",
+      "adapter_steps": 136,
+      "adapter_sha256": "b6e2ef18dfc5b0ba22613b72c7fce925f823b05cc71c3be630624bbf4b4b7543",
+      "adapter_pilot_only": true
+    },
+    "protocol": "non-streaming HTTP; full-response latency",
+    "max_new_tokens": 96,
+    "decoding": "greedy",
+    "warmup_excluded": true,
+    "iterations": [
+      {
+        "iteration": 1,
+        "client_ms": 720.176,
+        "response_utf8_bytes": 176,
+        "reply_chars": 29,
+        "finish_reason": "stop"
+      },
+      {
+        "iteration": 2,
+        "client_ms": 440.035,
+        "response_utf8_bytes": 137,
+        "reply_chars": 16,
+        "finish_reason": "stop"
+      },
+      {
+        "iteration": 3,
+        "client_ms": 439.28,
+        "response_utf8_bytes": 134,
+        "reply_chars": 15,
+        "finish_reason": "stop"
+      },
+      {
+        "iteration": 4,
+        "client_ms": 483.235,
+        "response_utf8_bytes": 131,
+        "reply_chars": 14,
+        "finish_reason": "stop"
+      },
+      {
+        "iteration": 5,
+        "client_ms": 487.812,
+        "response_utf8_bytes": 131,
+        "reply_chars": 14,
+        "finish_reason": "stop"
+      }
+    ],
+    "client_latency": {
+      "n": 5,
+      "min_ms": 439.28,
+      "p50_ms": 483.235,
+      "p95_ms": 720.176,
+      "max_ms": 720.176,
+      "mean_ms": 514.108
+    }
+  },
+  "wall_seconds": 3.396
+}

@@ -1,6 +1,10 @@
 import {DialogueState,speechChunks} from './dialogue-state.js';
 import {runSpeechQueue} from './speech-queue.js';
+import {DuplexController} from './duplex-controller.js';
+import {InteractionLog} from './interaction-log.js';
 const dialogue=new DialogueState();
+const duplex=new DuplexController();
+const trace=new InteractionLog();
 const $ = id => document.getElementById(id);
 const messages = $('messages'), input = $('input'), pet = $('pet');
 const starters = [...document.querySelectorAll('[data-prompt]')];
@@ -27,18 +31,39 @@ const prosody={joy:[1.02,1.06],warm:[.96,1],calm:[.9,.96],curious:[.98,1.03],sup
 function cancelPlayback(reason='user_speech'){
   playbackEpoch++;
   if(playback){
+    trace.mark('playback.cancel',{phase:'playing'});
     playback.controller?.abort();
     try{playback.source?.stop();}catch{}
     dialogue.interrupt(playback.node,reason);
     playback.label.textContent='伴点 · 已暂停朗读';
     playback=null;
   }
+  if(!active)duplex.output('idle');
   window.speechSynthesis?.cancel();
 }
+function pausePlayback(){
+  if(!playback||playback.paused)return false;
+  playback.paused=true;
+  if(playback.cloud)speechContext?.suspend().catch(()=>{});
+  else window.speechSynthesis?.pause();
+  playback.label.textContent='伴点 · 正在判断插话';
+  trace.mark('playback.hold',{phase:'playing'});
+  return true;
+}
+function resumePlayback(intent=null){
+  if(!playback?.paused)return false;
+  playback.paused=false;
+  if(playback.cloud)speechContext?.resume().catch(()=>{});
+  else window.speechSynthesis?.resume();
+  playback.label.textContent='伴点 · 继续朗读';
+  trace.mark('playback.resume',{phase:'playing',intent});
+  return true;
+}
 function speak(node,answer,reply){
-  const cloud=Boolean(boot?.serverTts&&speechContext?.state==='running');
+  const cloud=Boolean(boot?.serverTts&&speechContext);
   const epoch=++playbackEpoch,chunks=speechChunks(node.reply,cloud?(boot.speechChunkLength||72):36),controller=new AbortController();
-  playback={node,label:answer.querySelector('small'),controller};
+  playback={node,label:answer.querySelector('small'),controller,cloud,paused:false};
+  if(duplex.pending)pausePlayback();
   const load=cloud?async(chunk,signal)=>{
     const res=await fetch('/api/speech',{method:'POST',headers:{'Content-Type':'application/json','X-Bandi-Token':boot.token},body:JSON.stringify({id:reply.id,offset:chunk.start,end:chunk.end}),signal});
     if(!res.ok)throw Error('Speech unavailable');
@@ -66,7 +91,7 @@ function speak(node,answer,reply){
     try{window.speechSynthesis.speak(utterance);}catch(error){cleanup();reject(error);}
   });
   void runSpeechQueue({chunks,load,play,fallback,acknowledge:chunk=>dialogue.acknowledge(node,chunk.end),signal:controller.signal,isCurrent:()=>epoch===playbackEpoch})
-    .then(result=>{if(epoch===playbackEpoch&&result.status==='complete')playback=null;})
+    .then(result=>{if(epoch===playbackEpoch&&result.status==='complete'){playback=null;duplex.output('idle');}})
     .catch(()=>{if(epoch===playbackEpoch){cancelPlayback('playback_error');note('朗读中断，文字回复已保留。');}});
 }
 
@@ -147,10 +172,11 @@ function failed(turn,label,mayRetry=true) {
 }
 function stop(mark=false) {
   if(active) {
+    trace.mark('generation.cancel',{phase:'generating'});
     const turn=active; active=null;dialogue.interrupt(turn.node); turn.controller.abort(); turn.pending.remove();
     if(mark) failed(turn,'已停止');
   }
-  cancelPlayback();
+  cancelPlayback();duplex.output('idle');
   busy(false);
 }
 function renderReply(reply) {
@@ -191,6 +217,7 @@ async function run(turn) {
   const pending=card('assistant pending','伴点','正在回应');
   const controller=new AbortController();
   turn.controller=controller; turn.pending=pending; active=turn;
+  duplex.output('generating');trace.mark('generation.start',{phase:'generating'});
   append(pending,true);
   busy(true);
   try {
@@ -201,12 +228,15 @@ async function run(turn) {
     pending.replaceWith(answer);
     if(follow) jump();else updateJump();
     const replyText=reply.segments.map(s=>s.text).join('\n');
-    const spoken=Boolean(voice&&(window.speechSynthesis||(boot.serverTts&&speechContext?.state==='running')));
+    const spoken=Boolean(voice&&(window.speechSynthesis||(boot.serverTts&&speechContext)));
     dialogue.complete(turn.node,replyText,spoken);
+    duplex.output(spoken?'playing':'idle');
+    trace.mark(spoken?'playback.ready':'generation.complete',{phase:spoken?'playing':'idle'});
     if(input.value.trim()===text) input.value='';
     if(spoken)speak(turn.node,answer,reply);
   } catch(e) {
     if(active!==turn || controller.signal.aborted) return;
+    duplex.output('idle');
     pending.remove();
     const filtered=e.message==='MODEL_FILTERED';
     failed(turn,filtered?'未显示回复':'未收到回复',!filtered);
@@ -262,18 +292,42 @@ fetch('/api/bootstrap').then(r=>{
 }).catch(()=>{note('无法连接本机服务，请重新打开伴点。');});
 
 
-window.ximChat={send,stop:()=>stop(true),note,subtitle,mood,get token(){return boot?.token},get busy(){return Boolean(active)},get speaking(){return Boolean(window.speechSynthesis?.speaking)}};
+window.ximChat={send,stop:()=>stop(true),note,subtitle,mood,get token(){return boot?.token},get busy(){return Boolean(active)},get speaking(){return playback?!playback.paused:Boolean(window.speechSynthesis?.speaking)}};
 const filmDialog=document.querySelector('#filmDialog');
 document.querySelector('#filmOpen').onclick=()=>filmDialog.showModal();
 document.querySelector('#filmClose').onclick=()=>filmDialog.close();
 filmDialog.addEventListener('close',()=>filmDialog.querySelector('video').pause());
 filmDialog.addEventListener('cancel',()=>filmDialog.querySelector('video').pause());
-window.addEventListener('xim:speech-start',()=>{if(active||playback)stop(true);});
+window.addEventListener('xim:speech-start',()=>{
+  const decision=duplex.beginSpeech();trace.mark('speech.start',{phase:decision.phase||duplex.phase});
+  if(decision.action==='hold'){
+    if(decision.phase==='playing')pausePlayback();
+    $('state').textContent='正在听你说';
+  }
+});
 window.addEventListener('xim:voice-closed',()=>{
   cancelPlayback('voice_closed');
   $('state').textContent='我在这里';delete pet.dataset.activity;
 });
-window.addEventListener('xim:transcript',e=>{if(e.detail.trim())send(e.detail.trim());});
+window.addEventListener('xim:transcript',e=>{
+  const text=e.detail.trim(),decision=duplex.resolveSpeech(text);
+  trace.mark('duplex.'+decision.action,{phase:decision.phase,intent:decision.intent});
+  if(decision.action==='resume'){
+    resumePlayback(decision.intent||null);
+    note(decision.intent==='backchannel'?'听到你的附和，继续刚才的内容。':'刚才那句没有听清，继续当前内容；如需纠正请再说一次。');
+    $('state').textContent=active?'正在回应':'我在这里';
+    return;
+  }
+  if(decision.action==='interrupt')stop(true);
+  if(text)send(text);
+});
 window.addEventListener('xim:voice-ready',()=>{
   prepareSpeech();voice=true;$('mute').textContent='声音开启';$('mute').setAttribute('aria-pressed','true');
 });
+$('exportTrace').onclick=()=>{
+  const payload=trace.export({version:boot?.version,model:boot?.model});
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='xim-interaction-trace-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json';a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);note('已导出验证记录；不含录音或对话原文。');
+};

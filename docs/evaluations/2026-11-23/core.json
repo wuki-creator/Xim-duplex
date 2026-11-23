@@ -1,0 +1,153 @@
+{
+  "schema": "xim-component-eval-v1",
+  "component": "core",
+  "started_at_utc": "2026-11-23T08:37:54.248852+00:00",
+  "host": "biomap-a100-roce-0018",
+  "execution": "sequential",
+  "results": {
+    "audio": {
+      "source": "AISHELL-3 research reference",
+      "duration_s": 3.5359,
+      "pcm16_16k_sha256": "d9bb097c96734ec2a7cd5022a789efbe91e67ec958770364e8a7b75d1b5be97d"
+    },
+    "asr": {
+      "health": {
+        "ready": true,
+        "model": "Whisper-small",
+        "engine": "whisper"
+      },
+      "warmup_excluded": true,
+      "iterations": [
+        {
+          "iteration": 1,
+          "client_ms": 860.8,
+          "transcript_chars": 9,
+          "no_match": false
+        },
+        {
+          "iteration": 2,
+          "client_ms": 922.829,
+          "transcript_chars": 9,
+          "no_match": false
+        },
+        {
+          "iteration": 3,
+          "client_ms": 866.815,
+          "transcript_chars": 9,
+          "no_match": false
+        },
+        {
+          "iteration": 4,
+          "client_ms": 895.733,
+          "transcript_chars": 9,
+          "no_match": false
+        },
+        {
+          "iteration": 5,
+          "client_ms": 894.005,
+          "transcript_chars": 9,
+          "no_match": false
+        }
+      ],
+      "client_latency": {
+        "n": 5,
+        "min_ms": 860.8,
+        "p50_ms": 894.005,
+        "p95_ms": 922.829,
+        "max_ms": 922.829,
+        "mean_ms": 888.036
+      }
+    },
+    "turn": {
+      "health": {
+        "ready": true,
+        "model": "smart-turn-v3.2-cpu",
+        "revision": "f766f81d3cfdf7737ac64aad813d91bbfd56bf93",
+        "sha256": "2bb026316b14a660486a75b1733cd3fbab8c2fd0314dc9af7be49f8cca967e4f",
+        "sample_rate": 16000,
+        "maximum_context_seconds": 8,
+        "fine_tuned": false
+      },
+      "warmup_excluded": true,
+      "iterations": [
+        {
+          "iteration": 1,
+          "client_ms": 37.778,
+          "server_ms": 36.52,
+          "complete_probability": 0.9816229343414307
+        },
+        {
+          "iteration": 2,
+          "client_ms": 33.503,
+          "server_ms": 32.3,
+          "complete_probability": 0.9816229343414307
+        },
+        {
+          "iteration": 3,
+          "client_ms": 33.183,
+          "server_ms": 31.99,
+          "complete_probability": 0.9816229343414307
+        },
+        {
+          "iteration": 4,
+          "client_ms": 33.845,
+          "server_ms": 32.63,
+          "complete_probability": 0.9816229343414307
+        },
+        {
+          "iteration": 5,
+          "client_ms": 33.361,
+          "server_ms": 32.24,
+          "complete_probability": 0.9816229343414307
+        },
+        {
+          "iteration": 6,
+          "client_ms": 34.699,
+          "server_ms": 33.53,
+          "complete_probability": 0.9816229343414307
+        },
+        {
+          "iteration": 7,
+          "client_ms": 36.061,
+          "server_ms": 34.81,
+          "complete_probability": 0.9816229343414307
+        },
+        {
+          "iteration": 8,
+          "client_ms": 35.395,
+          "server_ms": 34.14,
+          "complete_probability": 0.9816229343414307
+        },
+        {
+          "iteration": 9,
+          "client_ms": 33.508,
+          "server_ms": 32.23,
+          "complete_probability": 0.9816229343414307
+        },
+        {
+          "iteration": 10,
+          "client_ms": 34.632,
+          "server_ms": 33.32,
+          "complete_probability": 0.9816229343414307
+        }
+      ],
+      "client_latency": {
+        "n": 10,
+        "min_ms": 33.183,
+        "p50_ms": 33.845,
+        "p95_ms": 37.778,
+        "max_ms": 37.778,
+        "mean_ms": 34.596
+      },
+      "server_latency": {
+        "n": 10,
+        "min_ms": 31.99,
+        "p50_ms": 32.63,
+        "p95_ms": 36.52,
+        "max_ms": 36.52,
+        "mean_ms": 33.371
+      }
+    }
+  },
+  "wall_seconds": 5.688
+}

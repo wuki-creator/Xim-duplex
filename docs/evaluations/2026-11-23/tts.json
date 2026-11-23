@@ -1,0 +1,62 @@
+{
+  "schema": "xim-component-eval-v1",
+  "component": "tts",
+  "started_at_utc": "2026-11-23T08:40:37.328280+00:00",
+  "host": "biomap-a100-roce-0018",
+  "execution": "sequential",
+  "results": {
+    "health": {
+      "ready": true,
+      "model": "xim-moss-nano",
+      "adapter": false
+    },
+    "device": "cpu",
+    "protocol": "non-streaming HTTP; complete WAV latency",
+    "warmup_excluded": true,
+    "iterations": [
+      {
+        "iteration": 1,
+        "client_ms": 2367.95,
+        "wav_bytes": 1075288,
+        "rtf": 0.8457,
+        "sample_rate": 48000,
+        "channels": 2,
+        "sample_width": 4,
+        "duration_s": 2.8,
+        "wav_format_tag": 3
+      },
+      {
+        "iteration": 2,
+        "client_ms": 1767.48,
+        "wav_bytes": 829528,
+        "rtf": 0.8183,
+        "sample_rate": 48000,
+        "channels": 2,
+        "sample_width": 4,
+        "duration_s": 2.16,
+        "wav_format_tag": 3
+      },
+      {
+        "iteration": 3,
+        "client_ms": 5720.382,
+        "wav_bytes": 2764888,
+        "rtf": 0.7945,
+        "sample_rate": 48000,
+        "channels": 2,
+        "sample_width": 4,
+        "duration_s": 7.2,
+        "wav_format_tag": 3
+      }
+    ],
+    "client_latency": {
+      "n": 3,
+      "min_ms": 1767.48,
+      "p50_ms": 2367.95,
+      "p95_ms": 5720.382,
+      "max_ms": 5720.382,
+      "mean_ms": 3285.271
+    },
+    "mean_rtf": 0.8195
+  },
+  "wall_seconds": 12.14
+}

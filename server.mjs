@@ -11,7 +11,11 @@ import {interpretWorkbench,computeWorld,generateWorkbenchImage} from './workbenc
 import {MeetingService,MeetingError} from './meeting.mjs';
 import {localChat,localSpeech,loopbackUrl} from './local-models.mjs';
 import {predictTurn,TurnReleaseGate} from './turn-completion.mjs';
-const root=path.dirname(fileURLToPath(import.meta.url)),port=Number(process.env.PORT||8788);
+const root=path.dirname(fileURLToPath(import.meta.url));
+const cliPortIndex=process.argv.findIndex(value=>value==='--port');
+const cliPort=cliPortIndex>=0?process.argv[cliPortIndex+1]:null;
+const port=Number(cliPort||process.env.PORT||8788);
+if(!Number.isInteger(port)||port<1||port>65535)throw Error('Invalid port');
 let asrConfig={};
 try {asrConfig=JSON.parse(await fs.readFile(path.join(root,'private/asr.json'),'utf8'));}catch{}
 const asrURL=process.env.ASR_URL||asrConfig.url||'http://127.0.0.1:8791';
@@ -45,7 +49,7 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&url.pathname==='/api/bootstrap'){
     const health=url=>url?fetch(loopbackUrl(url,'/health'),{signal:AbortSignal.timeout(1000)}).then(r=>r.ok?r.json():{}).catch(()=>({ready:false})):Promise.resolve({});
     const [asr,chat,turn]=await Promise.all([health(asrURL),health(localChatUrl),health(turnUrl)]);
-    return send(res,200,{token,configured:Boolean(localChatUrl&&localChatModel&&chat.ready===true),model:localChatModel||null,emotions,asrReady:asr.ready===true,asrModel:asr.model||null,turnReady:turn.ready===true,turnModel:turn.ready===true?turn.model:null,voiceLive:false,voiceMode:'cascade',voiceEngine:'xim-cascade',cloudAsr:false,serverTts:Boolean(localTtsUrl&&localTtsModel),speechChunkLength:localTtsModel==='xim-moss-nano'?14:72,imageReady:Boolean(localImageUrl&&localImageModel),version:'0.9.4',policy:styles.id});
+    return send(res,200,{token,configured:Boolean(localChatUrl&&localChatModel&&chat.ready===true),model:localChatModel||null,emotions,asrReady:asr.ready===true,asrModel:asr.model||null,turnReady:turn.ready===true,turnModel:turn.ready===true?turn.model:null,voiceLive:false,voiceMode:'cascade',voiceEngine:'xim-cascade',cloudAsr:false,serverTts:Boolean(localTtsUrl&&localTtsModel),speechChunkLength:localTtsModel==='xim-moss-nano'?14:72,imageReady:Boolean(localImageUrl&&localImageModel),version:'0.10.0',policy:styles.id});
   }
   if(url.pathname.startsWith('/api/')){
     if(req.method!=='POST'||req.headers['x-bandi-token']!==token||!String(req.headers['content-type']).startsWith('application/json')||
@@ -130,7 +134,7 @@ const server=http.createServer(async(req,res)=>{
     }
     return send(res,404,{error:'NOT_FOUND'});
   }
-  const assets=new Set(['index.html','app.js','speech-queue.js','dialogue-state.js','room.css','style.css','robot3d.js','voice-client.js','capture-worklet.js','workbench.html','workbench.css','workbench.js','world.js','meeting.html','meeting.css','meeting-ui.js','vendor/cannon-es.js','vendor/three.module.js','vendor/three.core.js','media/xim-demo.mp4','media/poster.png']);
+  const assets=new Set(['index.html','app.js','speech-queue.js','dialogue-state.js','duplex-policy.js','duplex-controller.js','interaction-log.js','room.css','style.css','robot3d.js','voice-client.js','capture-worklet.js','workbench.html','workbench.css','workbench.js','world.js','meeting.html','meeting.css','meeting-ui.js','vendor/cannon-es.js','vendor/three.module.js','vendor/three.core.js','media/xim-demo.mp4','media/poster.png']);
   const name=url.pathname==='/'?'index.html':url.pathname.slice(1);
   if(!assets.has(name)||!['GET','HEAD'].includes(req.method))return send(res,404,{error:'NOT_FOUND'});
   const bytes=await fs.readFile(name==='vendor/cannon-es.js'?path.join(root,'node_modules/cannon-es/dist/cannon-es.js'):path.join(root,'public',name));

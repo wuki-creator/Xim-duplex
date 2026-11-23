@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#111b18">
   <title>伴点 · 对话舱</title>
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/room.css">
 </head>
@@ -15,6 +16,7 @@
       <a class="workbench-entry" href="/workbench.html">物理工作台 ↗</a>
       <a class="workbench-entry" href="/meeting.html">会议空间 ↗</a>
       <button id="mute" type="button" aria-pressed="false">声音关闭</button>
+      <button id="exportTrace" type="button" title="只导出事件和时间，不含录音或对话原文">导出验证记录</button>
       <button id="clear" type="button">新对话</button>
     </div>
   </header>
@@ -82,7 +84,7 @@
     </section>
   </main>
   <section class="film-section"><button id="filmOpen" type="button">观看 Xim 概念演示 ↗</button><dialog id="filmDialog"><button id="filmClose" type="button" aria-label="关闭演示">关闭</button><h2>Xim Duplex</h2><p>交互概念演示 · 非性能实测</p><video controls preload="metadata" playsinline poster="/media/poster.png"><source src="/media/xim-demo.mp4" type="video/mp4"></video></dialog></section>
-  <footer class="room-footer"><span>伴点 · 个人陪伴空间</span><span>v0.9.4</span></footer>
+  <footer class="room-footer"><span>伴点 · 个人陪伴空间</span><span>v0.10.0 · 语义插话续播</span></footer>
 
   <script type="module" src="/app.js"></script>
   <script type="module" src="/robot3d.js"></script>
