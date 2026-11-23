@@ -50,6 +50,9 @@ export async function interpretWorkbench({url,model,input,context,signal,request
     const fenced=content.trim().match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
     x=JSON.parse(fenced?.[1]??content);
   }catch{return neutral('我刚没理解清楚。可以换个说法，或者直接点击操作。');}
+  // Resolve only the explicit selection alias, using the validated current
+  // scene. Unknown object ids still fail rather than selecting another object.
+  if(x?.target==='selected'&&selected)x={...x,target:selected};
   return checkAction(x,objects);
 }
 

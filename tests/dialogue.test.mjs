@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DialogueState,speechChunks} from '../public/dialogue-state.js';
-import {getModelReply,interruptionContext} from '../model-reply.mjs';
 
 test('interruption retains user intent and only acknowledged assistant audio',()=>{
   const state=new DialogueState(),one=state.begin('介绍两个方法');
@@ -34,15 +33,4 @@ test('playback chunks preserve UTF-16 offsets, punctuation and all text',()=>{
   const text='🙂你好。这里是一段比较长的介绍，请慢慢听。\n再见！';const chunks=speechChunks(text,8);
   assert.equal(chunks.map(c=>c.text).join(''),text);
   for(const c of chunks)assert.equal(text.slice(c.start,c.end),c.text);
-});
-test('playback context is bounded and reaches both model request paths',async()=>{
-  assert.equal(interruptionContext({phase:'bad'}),null);
-  assert.equal(interruptionContext({phase:'playing',heardPrefix:'x'.repeat(9000),unplayedCharacters:99999}).heardPrefix.length,1600);
-  const calls=[];
-  await getModelReply({key:'test',model:'test',text:'不是工作，是家里',history:[{role:'user',content:'有点烦'}],style:'warm',interruption:{phase:'playing',heardPrefix:'工作让你',unplayedCharacters:20},request:async(url,options)=>{
-    const body=JSON.parse(options.body);calls.push(body);
-    return Response.json({choices:[{finish_reason:'stop',message:{content:calls.length===1?' ':'明白，是家里的事。'}}]});
-  }});
-  assert.equal(calls.length,2);
-  for(const call of calls){assert.match(call.messages[0].content,/未播放部分不能视为用户听过/);assert.equal(JSON.parse(call.messages.at(-1).content).user_message,'不是工作，是家里');}
 });

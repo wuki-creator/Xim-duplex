@@ -221,7 +221,6 @@ function send(text) {
   if(active || !text) return;
   if(!boot){note('还没连上伴点，请稍后再试。');return;}
   if(text.length>2000){note(messagesForErrors.INVALID_INPUT);return;}
-  if(window.ximVoice?.live)window.ximVoice.stop('已结束实时语音，继续文字对话。');
   if(retryable?.text===text){run(retryable);return;}
   const user=card('user','你',text);
   append(user,true);run({text,user});
@@ -236,7 +235,6 @@ for(const b of starters) b.onclick=()=>{ if(!active){input.value=b.dataset.promp
 $('stop').onclick=()=>{stop(true);note('已停止本轮回复。');};
 $('mute').onclick=()=>{
   voice=!voice;$('mute').textContent=voice?'声音开启':'声音关闭';
-  window.ximVoice?.mute(!voice);
   if(voice)prepareSpeech();
   $('mute').setAttribute('aria-pressed',String(voice));if(!voice)cancelPlayback('muted');
 };
@@ -264,7 +262,7 @@ fetch('/api/bootstrap').then(r=>{
 }).catch(()=>{note('无法连接本机服务，请重新打开伴点。');});
 
 
-window.ximChat={send,stop:()=>stop(true),note,subtitle,mood,get token(){return boot?.token},get voiceSettings(){return boot&&{voiceLive:boot.voiceLive,cloudAsr:boot.cloudAsr}},get busy(){return Boolean(active)},get speaking(){return Boolean(window.speechSynthesis?.speaking)}};
+window.ximChat={send,stop:()=>stop(true),note,subtitle,mood,get token(){return boot?.token},get busy(){return Boolean(active)},get speaking(){return Boolean(window.speechSynthesis?.speaking)}};
 const filmDialog=document.querySelector('#filmDialog');
 document.querySelector('#filmOpen').onclick=()=>filmDialog.showModal();
 document.querySelector('#filmClose').onclick=()=>filmDialog.close();

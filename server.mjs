@@ -45,7 +45,7 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&url.pathname==='/api/bootstrap'){
     const health=url=>url?fetch(loopbackUrl(url,'/health'),{signal:AbortSignal.timeout(1000)}).then(r=>r.ok?r.json():{}).catch(()=>({ready:false})):Promise.resolve({});
     const [asr,chat,turn]=await Promise.all([health(asrURL),health(localChatUrl),health(turnUrl)]);
-    return send(res,200,{token,configured:Boolean(localChatUrl&&localChatModel&&chat.ready===true),model:localChatModel||null,emotions,asrReady:asr.ready===true,asrModel:asr.model||null,turnReady:turn.ready===true,turnModel:turn.ready===true?turn.model:null,voiceLive:false,voiceMode:'cascade',voiceEngine:'xim-cascade',cloudAsr:false,serverTts:Boolean(localTtsUrl&&localTtsModel),speechChunkLength:localTtsModel==='xim-moss-nano'?14:72,imageReady:Boolean(localImageUrl&&localImageModel),version:'0.9.3',policy:styles.id});
+    return send(res,200,{token,configured:Boolean(localChatUrl&&localChatModel&&chat.ready===true),model:localChatModel||null,emotions,asrReady:asr.ready===true,asrModel:asr.model||null,turnReady:turn.ready===true,turnModel:turn.ready===true?turn.model:null,voiceLive:false,voiceMode:'cascade',voiceEngine:'xim-cascade',cloudAsr:false,serverTts:Boolean(localTtsUrl&&localTtsModel),speechChunkLength:localTtsModel==='xim-moss-nano'?14:72,imageReady:Boolean(localImageUrl&&localImageModel),version:'0.9.4',policy:styles.id});
   }
   if(url.pathname.startsWith('/api/')){
     if(req.method!=='POST'||req.headers['x-bandi-token']!==token||!String(req.headers['content-type']).startsWith('application/json')||

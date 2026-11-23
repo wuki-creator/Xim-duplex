@@ -1,0 +1,563 @@
+{
+  "model_name": "xim-chat-v1",
+  "experiment": "r2",
+  "training_completed_at_utc": "2026-11-16T15:04:38.642882+00:00",
+  "reviewed_date": "2026-11-23",
+  "pilot_only": true,
+  "stage_timings": [
+    {
+      "stage": "sft",
+      "returncode": 0,
+      "seconds": 173.86603562813252
+    },
+    {
+      "stage": "grpo",
+      "returncode": 0,
+      "seconds": 223.59330389089882
+    },
+    {
+      "stage": "sft-tasks",
+      "returncode": 0,
+      "seconds": 163.9240027423948
+    },
+    {
+      "stage": "sft-dialogue",
+      "returncode": 0,
+      "seconds": 205.23666028864682
+    },
+    {
+      "stage": "grpo-tasks",
+      "returncode": 0,
+      "seconds": 164.41133284568787
+    },
+    {
+      "stage": "grpo-dialogue",
+      "returncode": 0,
+      "seconds": 205.10922392178327
+    }
+  ],
+  "selected_stage": "sft",
+  "selection_reason": "Same task holdout accuracy; all GRPO reward groups had zero variance; no extra RL task learning signal.",
+  "training": {
+    "sft": {
+      "stage": "sft",
+      "actual_steps": 136,
+      "training_source_sha256": {
+        "train_multitask.py": "27f375e42e4257e95a95c4f16c97e38ce9445cfe5c44a29de6a3186ea45e1ea5",
+        "multitask_rewards.py": "f1d990dfdbe7c1b7afd363f44b9d94cec7bc3469a56bae3e2095302919d16647"
+      },
+      "base_config_sha256": "f7c4eadfbbf522470667b797a3c89be2524832d2d599797248dc304fff447c30",
+      "dataset_sha256": "5008ad5ee3ef55576487deafeb0edadcdaa96317e7a92e5daa8545608a0e2bfa",
+      "base_parameters": 8190735360,
+      "trainable_params": 7667712,
+      "trainable_delta_l2": 4.795480847456707,
+      "adapter_sha256": "b6e2ef18dfc5b0ba22613b72c7fce925f823b05cc71c3be630624bbf4b4b7543",
+      "elapsed_seconds": 145.4733515335247,
+      "reward_audit": null,
+      "peak_cuda_allocated_bytes": 17559188480,
+      "peak_cuda_reserved_bytes": 22869442560
+    },
+    "grpo": {
+      "stage": "grpo",
+      "actual_steps": 120,
+      "training_source_sha256": {
+        "train_multitask.py": "27f375e42e4257e95a95c4f16c97e38ce9445cfe5c44a29de6a3186ea45e1ea5",
+        "multitask_rewards.py": "f1d990dfdbe7c1b7afd363f44b9d94cec7bc3469a56bae3e2095302919d16647"
+      },
+      "base_config_sha256": "f7c4eadfbbf522470667b797a3c89be2524832d2d599797248dc304fff447c30",
+      "dataset_sha256": "1028170dcf6d86dfa5c0991adb1320fb2e2bcd5bbd41aca10b343fbbebc73b58",
+      "base_parameters": 8190735360,
+      "trainable_params": 7667712,
+      "trainable_delta_l2": 0.33617176169173124,
+      "adapter_sha256": "bdd4fb9d3877b193346cde778b721114c831d0c6613faf5c702f101480ed2652",
+      "elapsed_seconds": 196.86661099269986,
+      "reward_audit": {
+        "calls": 120,
+        "sampled_completions": 480,
+        "tasks": {
+          "arm_plan": {
+            "samples": 68,
+            "correct": 68,
+            "legal": 68,
+            "groups": 17,
+            "groups_with_reward_variance": 0,
+            "reward_sum": 68.0
+          },
+          "meeting_count": {
+            "samples": 104,
+            "correct": 104,
+            "legal": 104,
+            "groups": 26,
+            "groups_with_reward_variance": 0,
+            "reward_sum": 104.0
+          },
+          "correction": {
+            "samples": 92,
+            "correct": 92,
+            "legal": 92,
+            "groups": 23,
+            "groups_with_reward_variance": 0,
+            "reward_sum": 92.0
+          },
+          "scene_action": {
+            "samples": 124,
+            "correct": 124,
+            "legal": 124,
+            "groups": 31,
+            "groups_with_reward_variance": 0,
+            "reward_sum": 124.0
+          },
+          "yield": {
+            "samples": 92,
+            "correct": 92,
+            "legal": 92,
+            "groups": 23,
+            "groups_with_reward_variance": 0,
+            "reward_sum": 92.0
+          }
+        }
+      },
+      "peak_cuda_allocated_bytes": 16762073600,
+      "peak_cuda_reserved_bytes": 17014194176
+    }
+  },
+  "evaluations": {
+    "sft-tasks": {
+      "holdout_sha256": "51de9bcb5d4d09c09f8a554fe894552dbc4c7b819ee154a3d4ee65842e925b35",
+      "evaluation_source_sha256": {
+        "evaluate_multitask.py": "2f11e50a3ac3e57c159e7ed329aa791810b4cc56848886ab6c19933b60a15c4c",
+        "multitask_rewards.py": "f1d990dfdbe7c1b7afd363f44b9d94cec7bc3469a56bae3e2095302919d16647"
+      },
+      "summary": {
+        "baseline": {
+          "examples": 100,
+          "format_rate": 1.0,
+          "legal_rate": 0.94,
+          "correct_rate": 0.94,
+          "complete_correct_rate": 0.94,
+          "mean_reward": 0.94,
+          "truncated_rate": 0.0,
+          "mean_generation_seconds": 0.6406502107996493
+        },
+        "adapter": {
+          "examples": 100,
+          "format_rate": 1.0,
+          "legal_rate": 1.0,
+          "correct_rate": 1.0,
+          "complete_correct_rate": 1.0,
+          "mean_reward": 1.0,
+          "truncated_rate": 0.0,
+          "mean_generation_seconds": 0.6843934949673712
+        }
+      },
+      "per_task": {
+        "meeting_count": {
+          "baseline": {
+            "examples": 20,
+            "format_rate": 1.0,
+            "legal_rate": 1.0,
+            "correct_rate": 1.0,
+            "complete_correct_rate": 1.0,
+            "mean_reward": 1.0,
+            "truncated_rate": 0.0,
+            "mean_generation_seconds": 0.39960594940930605
+          },
+          "adapter": {
+            "examples": 20,
+            "format_rate": 1.0,
+            "legal_rate": 1.0,
+            "correct_rate": 1.0,
+            "complete_correct_rate": 1.0,
+            "mean_reward": 1.0,
+            "truncated_rate": 0.0,
+            "mean_generation_seconds": 0.4205118115525693
+          }
+        },
+        "scene_action": {
+          "baseline": {
+            "examples": 20,
+            "format_rate": 1.0,
+            "legal_rate": 0.7,
+            "correct_rate": 0.7,
+            "complete_correct_rate": 0.7,
+            "mean_reward": 0.7,
+            "truncated_rate": 0.0,
+            "mean_generation_seconds": 0.8579100822564214
+          },
+          "adapter": {
+            "examples": 20,
+            "format_rate": 1.0,
+            "legal_rate": 1.0,
+            "correct_rate": 1.0,
+            "complete_correct_rate": 1.0,
+            "mean_reward": 1.0,
+            "truncated_rate": 0.0,
+            "mean_generation_seconds": 0.6026232990901917
+          }
+        },
+        "correction": {
+          "baseline": {
+            "examples": 20,
+            "format_rate": 1.0,
+            "legal_rate": 1.0,
+            "correct_rate": 1.0,
+            "complete_correct_rate": 1.0,
+            "mean_reward": 1.0,
+            "truncated_rate": 0.0,
+            "mean_generation_seconds": 0.4273303932510316
+          },
+          "adapter": {
+            "examples": 20,
+            "format_rate": 1.0,
+            "legal_rate": 1.0,
+            "correct_rate": 1.0,
+            "complete_correct_rate": 1.0,
+            "mean_reward": 1.0,
+            "truncated_rate": 0.0,
+            "mean_generation_seconds": 0.5300416012760252
+          }
+        },
+        "yield": {
+          "baseline": {
+            "examples": 20,
+            "format_rate": 1.0,
+            "legal_rate": 1.0,
+            "correct_rate": 1.0,
+            "complete_correct_rate": 1.0,
+            "mean_reward": 1.0,
+            "truncated_rate": 0.0,
+            "mean_generation_seconds": 0.18957374743185937
+          },
+          "adapter": {
+            "examples": 20,
+            "format_rate": 1.0,
+            "legal_rate": 1.0,
+            "correct_rate": 1.0,
+            "complete_correct_rate": 1.0,
+            "mean_reward": 1.0,
+            "truncated_rate": 0.0,
+            "mean_generation_seconds": 0.2307040655054152
+          }
+        },
+        "arm_plan": {
+          "baseline": {
+            "examples": 20,
+            "format_rate": 1.0,
+            "legal_rate": 1.0,
+            "correct_rate": 1.0,
+            "complete_correct_rate": 1.0,
+            "mean_reward": 1.0,
+            "truncated_rate": 0.0,
+            "mean_generation_seconds": 1.3288308816496284
+          },
+          "adapter": {
+            "examples": 20,
+            "format_rate": 1.0,
+            "legal_rate": 1.0,
+            "correct_rate": 1.0,
+            "complete_correct_rate": 1.0,
+            "mean_reward": 1.0,
+            "truncated_rate": 0.0,
+            "mean_generation_seconds": 1.6380866974126547
+          }
+        }
+      },
+      "limitations": "Template holdout only; not evidence of human preference, natural conversation, actual task execution or voice latency."
+    },
+    "grpo-tasks": {
+      "holdout_sha256": "51de9bcb5d4d09c09f8a554fe894552dbc4c7b819ee154a3d4ee65842e925b35",
+      "evaluation_source_sha256": {
+        "evaluate_multitask.py": "2f11e50a3ac3e57c159e7ed329aa791810b4cc56848886ab6c19933b60a15c4c",
+        "multitask_rewards.py": "f1d990dfdbe7c1b7afd363f44b9d94cec7bc3469a56bae3e2095302919d16647"
+      },
+      "summary": {
+        "baseline": {
+          "examples": 100,
+          "format_rate": 1.0,
+          "legal_rate": 0.94,
+          "correct_rate": 0.94,
+          "complete_correct_rate": 0.94,
+          "mean_reward": 0.94,
+          "truncated_rate": 0.0,
+          "mean_generation_seconds": 0.6400653616897762
+        },
+        "adapter": {
+          "examples": 100,
+          "format_rate": 1.0,
+          "legal_rate": 1.0,
+          "correct_rate": 1.0,
+          "complete_correct_rate": 1.0,
+          "mean_reward": 1.0,
+          "truncated_rate": 0.0,
+          "mean_generation_seconds": 0.6940303950756789
+        }
+      },
+      "per_task": {
+        "meeting_count": {
+          "baseline": {
+            "examples": 20,
+            "format_rate": 1.0,
+            "legal_rate": 1.0,
+            "correct_rate": 1.0,
+            "complete_correct_rate": 1.0,
+            "mean_reward": 1.0,
+            "truncated_rate": 0.0,
+            "mean_generation_seconds": 0.4020683958660811
+          },
+          "adapter": {
+            "examples": 20,
+            "format_rate": 1.0,
+            "legal_rate": 1.0,
+            "correct_rate": 1.0,
+            "complete_correct_rate": 1.0,
+            "mean_reward": 1.0,
+            "truncated_rate": 0.0,
+            "mean_generation_seconds": 0.42800933253020046
+          }
+        },
+        "scene_action": {
+          "baseline": {
+            "examples": 20,
+            "format_rate": 1.0,
+            "legal_rate": 0.7,
+            "correct_rate": 0.7,
+            "complete_correct_rate": 0.7,
+            "mean_reward": 0.7,
+            "truncated_rate": 0.0,
+            "mean_generation_seconds": 0.8279990741517395
+          },
+          "adapter": {
+            "examples": 20,
+            "format_rate": 1.0,
+            "legal_rate": 1.0,
+            "correct_rate": 1.0,
+            "complete_correct_rate": 1.0,
+            "mean_reward": 1.0,
+            "truncated_rate": 0.0,
+            "mean_generation_seconds": 0.6054736309684813
+          }
+        },
+        "correction": {
+          "baseline": {
+            "examples": 20,
+            "format_rate": 1.0,
+            "legal_rate": 1.0,
+            "correct_rate": 1.0,
+            "complete_correct_rate": 1.0,
+            "mean_reward": 1.0,
+            "truncated_rate": 0.0,
+            "mean_generation_seconds": 0.4332252200692892
+          },
+          "adapter": {
+            "examples": 20,
+            "format_rate": 1.0,
+            "legal_rate": 1.0,
+            "correct_rate": 1.0,
+            "complete_correct_rate": 1.0,
+            "mean_reward": 1.0,
+            "truncated_rate": 0.0,
+            "mean_generation_seconds": 0.5394393431954085
+          }
+        },
+        "yield": {
+          "baseline": {
+            "examples": 20,
+            "format_rate": 1.0,
+            "legal_rate": 1.0,
+            "correct_rate": 1.0,
+            "complete_correct_rate": 1.0,
+            "mean_reward": 1.0,
+            "truncated_rate": 0.0,
+            "mean_generation_seconds": 0.18963860077783465
+          },
+          "adapter": {
+            "examples": 20,
+            "format_rate": 1.0,
+            "legal_rate": 1.0,
+            "correct_rate": 1.0,
+            "complete_correct_rate": 1.0,
+            "mean_reward": 1.0,
+            "truncated_rate": 0.0,
+            "mean_generation_seconds": 0.23313040737994015
+          }
+        },
+        "arm_plan": {
+          "baseline": {
+            "examples": 20,
+            "format_rate": 1.0,
+            "legal_rate": 1.0,
+            "correct_rate": 1.0,
+            "complete_correct_rate": 1.0,
+            "mean_reward": 1.0,
+            "truncated_rate": 0.0,
+            "mean_generation_seconds": 1.3473955175839365
+          },
+          "adapter": {
+            "examples": 20,
+            "format_rate": 1.0,
+            "legal_rate": 1.0,
+            "correct_rate": 1.0,
+            "complete_correct_rate": 1.0,
+            "mean_reward": 1.0,
+            "truncated_rate": 0.0,
+            "mean_generation_seconds": 1.6640992613043637
+          }
+        }
+      },
+      "limitations": "Template holdout only; not evidence of human preference, natural conversation, actual task execution or voice latency."
+    },
+    "sft-dialogue": {
+      "validation_sha256": "2bed86109f6071d87811a97784f9b23f5af711325f3a29a65d41b52fd11298e5",
+      "evaluation_source_sha256": "f8300edbb978a4db54157b8ee3bcc5dc6229cdf5ed61b2d7eab54d52730aab09",
+      "summary": {
+        "baseline": {
+          "examples": 16,
+          "reference_tokens_including_eos": 2596,
+          "reference_token_nll": 2.1124724671818624,
+          "reference_perplexity": 8.268660022438747,
+          "truncated_rate": 0.8125,
+          "empty_generation_rate": 0.0,
+          "reasoning_channel_rejection_rate": 0.0,
+          "mean_generated_tokens": 181.3125,
+          "mean_generation_seconds": 5.602907320426311,
+          "p50_generation_seconds": 5.7677844278514385,
+          "p95_generation_seconds": 6.993417557328939
+        },
+        "adapter": {
+          "examples": 16,
+          "reference_tokens_including_eos": 2596,
+          "reference_token_nll": 1.6169321181594132,
+          "reference_perplexity": 5.037611787831638,
+          "truncated_rate": 0.5,
+          "empty_generation_rate": 0.0,
+          "reasoning_channel_rejection_rate": 0.0,
+          "mean_generated_tokens": 128.25,
+          "mean_generation_seconds": 4.827468149422202,
+          "p50_generation_seconds": 6.608985626138747,
+          "p95_generation_seconds": 7.380080140195787
+        }
+      },
+      "limitations": [
+        "Reference-token NLL is predictive fit to these references, not subjective naturalness, factual accuracy or human preference.",
+        "These are a small, filtered official validation sample, not a blind final test or a product-dialogue regression suite.",
+        "Generation timing excludes ASR, TTS, networking and human turn-taking; it is not an end-to-end speech latency claim.",
+        "No word-overlap heuristic or automatic product-quality promotion is used."
+      ]
+    },
+    "grpo-dialogue": {
+      "validation_sha256": "2bed86109f6071d87811a97784f9b23f5af711325f3a29a65d41b52fd11298e5",
+      "evaluation_source_sha256": "f8300edbb978a4db54157b8ee3bcc5dc6229cdf5ed61b2d7eab54d52730aab09",
+      "summary": {
+        "baseline": {
+          "examples": 16,
+          "reference_tokens_including_eos": 2596,
+          "reference_token_nll": 2.1124724671818624,
+          "reference_perplexity": 8.268660022438747,
+          "truncated_rate": 0.8125,
+          "empty_generation_rate": 0.0,
+          "reasoning_channel_rejection_rate": 0.0,
+          "mean_generated_tokens": 181.3125,
+          "mean_generation_seconds": 5.362495893263258,
+          "p50_generation_seconds": 5.6356187192723155,
+          "p95_generation_seconds": 6.011433011852205
+        },
+        "adapter": {
+          "examples": 16,
+          "reference_tokens_including_eos": 2596,
+          "reference_token_nll": 1.6179476192074673,
+          "reference_perplexity": 5.04273008626073,
+          "truncated_rate": 0.5625,
+          "empty_generation_rate": 0.0,
+          "reasoning_channel_rejection_rate": 0.0,
+          "mean_generated_tokens": 140.0625,
+          "mean_generation_seconds": 5.164805502339732,
+          "p50_generation_seconds": 6.793107524514198,
+          "p95_generation_seconds": 8.110658620484173
+        }
+      },
+      "limitations": [
+        "Reference-token NLL is predictive fit to these references, not subjective naturalness, factual accuracy or human preference.",
+        "These are a small, filtered official validation sample, not a blind final test or a product-dialogue regression suite.",
+        "Generation timing excludes ASR, TTS, networking and human turn-taking; it is not an end-to-end speech latency claim.",
+        "No word-overlap heuristic or automatic product-quality promotion is used."
+      ]
+    }
+  },
+  "limitations": [
+    "100 synthetic template holdout tasks, 16 filtered public validation conversations; no blind human quality or real voice benchmark.",
+    "NLL measures fit to reference tokens, not naturalness or preference.",
+    "6B and 10B not run; 8.19B LoRA measured only."
+  ],
+  "product_regression": {
+    "qwen15b": {
+      "model_name": "Qwen2.5-1.5B-Instruct",
+      "created_at_utc": "2026-11-16T14:30:34.406Z",
+      "health": {
+        "ready": true,
+        "model": "Qwen2.5-1.5B-Instruct"
+      },
+      "examples": 11,
+      "accepted": 7,
+      "limitations": "Contract checks and four exact scene targets only. Chat content and meeting plans require human review. No external tools, human preference test, real voice interaction or automatic deployment.",
+      "source_sha256": {
+        "scripts/evaluate_runtime_contracts.mjs": "cedf1d319982b13a169dee8773bbb35fbc059d376c2f39d7c922c2794fb1a677",
+        "local-models.mjs": "d158e9aeeee8c75f55e9f78f7567e156418f950ce9f07d762a1ced8b69c83b8c",
+        "meeting.mjs": "2f921107df5d78b13f939fca2135c55f5aa039f692f922893d7f8ecef66c464f",
+        "workbench.mjs": "34f120a7814d2bc517f20a838c6f879b7bffd7ba9e5b98c504f363a557be2de9",
+        "evolution/active.json": "da7802b6f5f019953226f41bd054ecf62c359368ccda533703c13e6ca91021d7"
+      }
+    },
+    "xim_sft_before_alias_fix": {
+      "model_name": "xim-chat-v1",
+      "created_at_utc": "2026-11-23T05:45:02.855Z",
+      "health": {
+        "ready": true,
+        "model": "xim-chat-v1",
+        "base_model": "Qwen/Qwen3-8B",
+        "adapter": true,
+        "thinking_enabled": false,
+        "offline": true,
+        "adapter_stage": "sft",
+        "adapter_steps": 136,
+        "adapter_sha256": "b6e2ef18dfc5b0ba22613b72c7fce925f823b05cc71c3be630624bbf4b4b7543",
+        "adapter_pilot_only": true
+      },
+      "examples": 11,
+      "accepted": 10,
+      "limitations": "Contract checks and four exact scene targets only. Chat content and meeting plans require human review. No external tools, human preference test, real voice interaction or automatic deployment.",
+      "source_sha256": {
+        "scripts/evaluate_runtime_contracts.mjs": "cedf1d319982b13a169dee8773bbb35fbc059d376c2f39d7c922c2794fb1a677",
+        "local-models.mjs": "d158e9aeeee8c75f55e9f78f7567e156418f950ce9f07d762a1ced8b69c83b8c",
+        "meeting.mjs": "2f921107df5d78b13f939fca2135c55f5aa039f692f922893d7f8ecef66c464f",
+        "workbench.mjs": "34f120a7814d2bc517f20a838c6f879b7bffd7ba9e5b98c504f363a557be2de9",
+        "evolution/active.json": "da7802b6f5f019953226f41bd054ecf62c359368ccda533703c13e6ca91021d7"
+      }
+    },
+    "xim_sft_after_alias_fix": {
+      "model_name": "xim-chat-v1",
+      "created_at_utc": "2026-11-23T05:45:54.792Z",
+      "health": {
+        "ready": true,
+        "model": "xim-chat-v1",
+        "base_model": "Qwen/Qwen3-8B",
+        "adapter": true,
+        "thinking_enabled": false,
+        "offline": true,
+        "adapter_stage": "sft",
+        "adapter_steps": 136,
+        "adapter_sha256": "b6e2ef18dfc5b0ba22613b72c7fce925f823b05cc71c3be630624bbf4b4b7543",
+        "adapter_pilot_only": true
+      },
+      "examples": 11,
+      "accepted": 11,
+      "limitations": "Contract checks and four exact scene targets only. Chat content and meeting plans require human review. No external tools, human preference test, real voice interaction or automatic deployment.",
+      "source_sha256": {
+        "scripts/evaluate_runtime_contracts.mjs": "cedf1d319982b13a169dee8773bbb35fbc059d376c2f39d7c922c2794fb1a677",
+        "local-models.mjs": "d158e9aeeee8c75f55e9f78f7567e156418f950ce9f07d762a1ced8b69c83b8c",
+        "meeting.mjs": "2f921107df5d78b13f939fca2135c55f5aa039f692f922893d7f8ecef66c464f",
+        "workbench.mjs": "0c6b04d4baf8cf9db285d4f9bc06229abe806bd2bc95423db7c02b4aa5626a35",
+        "evolution/active.json": "da7802b6f5f019953226f41bd054ecf62c359368ccda533703c13e6ca91021d7"
+      }
+    }
+  }
+}

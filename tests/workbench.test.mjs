@@ -24,6 +24,15 @@ test('workbench uses local model only and rejects truncated action plans',async(
   assert.equal(called,1);assert.equal(output.action,'talk');
 });
 
+test('selected alias resolves to the current validated selection, never an unknown object',async()=>{
+  const invoke=(target,selected)=>interpretWorkbench({url:'http://127.0.0.1:12345',model:'local',
+    input:'把选中的物体移到 [2,1,-1]',context:{objects:[{id:'obj-201'}],selected},
+    request:async()=>Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({action:'move',target,position:[2,1,-1]})}}]})});
+  assert.deepEqual(await invoke('selected','obj-201'),{action:'move',target:'obj-201',position:[2,1,-1]});
+  assert.equal((await invoke('selected','obj-999')).action,'talk');
+  assert.equal((await invoke('obj-999','obj-201')).action,'talk');
+});
+
 test('local arm solver returns a forward-consistent trajectory and rejects unreachable points',async()=>{
   const options={signal:AbortSignal.timeout(8000)};
   const start=[2.6,1.45,.3],target=[2.45,1.13,.65];

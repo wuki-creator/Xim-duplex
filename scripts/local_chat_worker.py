@@ -154,9 +154,13 @@ def main():
     parser.add_argument("--port", type=int, default=18797)
     parser.add_argument("--adapter", help="Explicit local adapter with a completed, matching training manifest")
     parser.add_argument("--max-input-tokens", type=int, default=8192)
+    parser.add_argument("--gpu-memory-fraction", type=float, default=1.0,
+                        help="Upper bound on this process's PyTorch GPU allocator")
     args = parser.parse_args()
     if not 1 <= args.port <= 65535 or not 128 <= args.max_input_tokens <= 32768:
         parser.error("Invalid port or input token limit")
+    if not 0 < args.gpu_memory_fraction <= 1:
+        parser.error("GPU memory fraction must be in (0, 1]")
     offline_environment()
     base = Path(args.model_dir).expanduser().resolve()
     if not base.is_dir() or not (base / "config.json").is_file():
@@ -167,6 +171,7 @@ def main():
     from transformers import AutoModelForCausalLM, AutoTokenizer
     if not torch.cuda.is_available():
         raise RuntimeError("A CUDA GPU is required")
+    torch.cuda.set_per_process_memory_fraction(args.gpu_memory_fraction, 0)
     dtype = torch.bfloat16 if config.get("model_type") == "qwen3" else torch.float16
     if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
         raise RuntimeError("This Qwen3 worker requires a BF16-capable GPU")

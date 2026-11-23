@@ -15,7 +15,7 @@ function stop(text='语音已结束'){
   status.textContent=text;button.setAttribute('aria-pressed','false');
   if(compact&&!['语音已结束','已开始新对话，语音已关闭。','已结束实时语音，继续文字对话。'].includes(text))window.ximChat?.note(text);
 }
-window.ximVoice={get active(){return active},get live(){return false},stop,mute:()=>{}};
+window.ximVoice={get active(){return active},stop};
 button.onclick=async()=>{
   if(active||pending){stop();return;}
   pending=true;const ticket=++generation;

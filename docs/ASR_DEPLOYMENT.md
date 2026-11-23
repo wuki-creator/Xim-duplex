@@ -35,7 +35,7 @@ python scripts/ssh_asr_tunnel.py --host <你的服务器> --user <你的账号>
 }
 ```
 
-`Start_Voice.ps1` 会读取这份独立配置；它不修改 DeepSeek 密钥文件。Node 读取识别地址的优先级是 `ASR_URL` → 此私有配置 → 本机默认端口 8791。首次修改配置后重启 Node。检查 `/api/bootstrap` 的 `asrReady` 与 `asrModel`，再进行真实讲话测试。
+`Start_Voice.ps1` 会读取这份独立配置。Node 读取识别地址的优先级是 `ASR_URL` → 此私有配置 → 本机默认端口 8791。首次修改配置后重启 Node。检查 `/api/bootstrap` 的 `asrReady` 与 `asrModel`，再进行真实讲话测试。
 
 ## 范围与验收
 
