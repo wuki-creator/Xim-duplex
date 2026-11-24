@@ -29,3 +29,39 @@ test('quiet speech is detected and manual endpoint releases continuous backgroun
  assert.equal(v.finish(),true);assert.equal(ends.length,1);assert.equal(v.finish(),false);
  for(let i=0;i<8;i++)v.push(frame(.02));assert.equal(starts,2);
 });
+
+test('pre-roll keeps the latest 800 ms in sample order across uneven packets', () => {
+  const ends = [];
+  const vad = new VadSegmenter({onStart() {}, onEnd: pcm => ends.push(pcm)});
+  const chunks = [];
+  // Quiet packets fill and wrap the ring before the four speech packets trigger onset.
+  for (let i = 1; i <= 29; i++) {
+    const packet = Buffer.alloc((23 + i % 7) * 32, i % 2 ? 0 : 1);
+    chunks.push(packet);
+    vad.push(packet);
+  }
+  for (let i = 0; i < 4; i++) {
+    const packet = frame(.1 + i * .03);
+    chunks.push(packet);
+    vad.push(packet);
+  }
+  const tail = frame(.4);
+  vad.push(tail);
+  assert.equal(vad.finish(), true);
+  assert.deepEqual(ends[0], Buffer.concat([Buffer.concat(chunks).subarray(-25600), tail]));
+});
+
+test('empty packets do not reset speech onset and a new utterance owns fresh audio', () => {
+  const ends = [];
+  const vad = new VadSegmenter({onStart() {}, onEnd: pcm => ends.push(pcm), startMs: 100});
+  const first = frame(.2);
+  vad.push(first);
+  vad.push(Buffer.alloc(0));
+  vad.push(first);
+  assert.equal(vad.finish(), true);
+  const next = frame(.4);
+  vad.push(next);
+  vad.push(next);
+  assert.equal(vad.finish(), true);
+  assert.deepEqual(ends, [Buffer.concat([first, first]), Buffer.concat([next, next])]);
+});

@@ -105,18 +105,21 @@ def pack_condition_chunk(
     return ConditionChunk(condition, chunk_id, generation_id, text_start, text_end)
 
 
-def _apply_rope(x: Tensor, position_ids: Tensor) -> Tensor:
-    """Apply rotary position embeddings to [B, H, T, D] queries or keys."""
+def _rope_factors(position_ids: Tensor, head_dim: int) -> tuple[Tensor, Tensor]:
+    """All layers and both projections rotate the same token positions."""
 
-    head_dim = x.shape[-1]
     half = head_dim // 2
     inv_freq = 1.0 / (
-        10000 ** (torch.arange(half, device=x.device, dtype=torch.float32) / half)
+        10000 ** (torch.arange(half, device=position_ids.device, dtype=torch.float32) / half)
     )
     angles = position_ids.to(torch.float32).unsqueeze(-1) * inv_freq
-    cos = angles.cos().unsqueeze(1).to(x.dtype)
-    sin = angles.sin().unsqueeze(1).to(x.dtype)
-    first, second = x[..., :half], x[..., half:]
+    return angles.cos().unsqueeze(1), angles.sin().unsqueeze(1)
+
+
+def _apply_rope(x: Tensor, factors: tuple[Tensor, Tensor]) -> Tensor:
+    cos, sin = factors
+    cos, sin = cos.to(x.dtype), sin.to(x.dtype)
+    first, second = x.chunk(2, dim=-1)
     return torch.cat((first * cos - second * sin, first * sin + second * cos), dim=-1)
 
 
@@ -139,14 +142,15 @@ class BlockCausalAttention(nn.Module):
         *,
         chunk_ids: Tensor,
         position_ids: Tensor,
+        rope_factors: tuple[Tensor, Tensor],
         key_padding_mask: Tensor,
         cache: Optional[LayerCache],
         use_cache: bool,
     ) -> tuple[Tensor, Optional[LayerCache]]:
         batch, query_len, _ = hidden.shape
         query, key, value = self.qkv(hidden).chunk(3, dim=-1)
-        query = _apply_rope(self._shape(query), position_ids)
-        key = _apply_rope(self._shape(key), position_ids)
+        query = _apply_rope(self._shape(query), rope_factors)
+        key = _apply_rope(self._shape(key), rope_factors)
         value = self._shape(value)
 
         if cache is not None:
@@ -202,6 +206,7 @@ class VoiceCondBlock(nn.Module):
         *,
         chunk_ids: Tensor,
         position_ids: Tensor,
+        rope_factors: tuple[Tensor, Tensor],
         key_padding_mask: Tensor,
         cache: Optional[LayerCache],
         use_cache: bool,
@@ -210,6 +215,7 @@ class VoiceCondBlock(nn.Module):
             self.norm1(hidden),
             chunk_ids=chunk_ids,
             position_ids=position_ids,
+            rope_factors=rope_factors,
             key_padding_mask=key_padding_mask,
             cache=cache,
             use_cache=use_cache,
@@ -337,6 +343,7 @@ class XimVoiceCondV1(nn.Module):
             ),
             dim=-1,
         )
+        rope_factors = _rope_factors(position_ids, self.config.d_model // self.config.num_heads)
         new_caches: list[LayerCache] = []
         for index, block in enumerate(self.blocks):
             cache = past_key_values[index] if past_key_values is not None else None
@@ -345,6 +352,7 @@ class XimVoiceCondV1(nn.Module):
                 condition,
                 chunk_ids=chunk_ids,
                 position_ids=position_ids,
+                rope_factors=rope_factors,
                 key_padding_mask=attention_mask,
                 cache=cache,
                 use_cache=use_cache,
