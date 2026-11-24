@@ -136,3 +136,24 @@ python training/evaluate_multitask.py \
 本轮没有训练声学编码器、MOSS 情绪适配器、Smart Turn、端到端全双工语音模型或真实世界模型。现有交互状态层是有界观测与规则建议；机械臂坐标提案只是任务生成，没有学习动作后的物理状态转移。真正的世界模型仍需观测—动作—下一状态轨迹、独立场景留出、预测误差与闭环任务评估。
 
 `xim_moss_adapter.py` 是可选的语音条件残差原型，目前没有由本轮训练得到的声音适配参数。现有 AISHELL-3 开发样本的 20 条训练、10 条留出仍只用于音频格式调试，不能当作足够的情绪或自然打断训练集。声音角色授权、真人偏好、扬声器回声、真人相互打断和语音首音延迟分别验证；不从文本任务分数外推这些能力。
+
+## XimVoiceCond-v1 独立模块与张量契约
+
+`xim_voice_cond.py` 是 2026-11-24 新增的可实例化 PyTorch 目标模块，产品名为 **XimVoiceCond-v1**。它把 `[B, T, d_xim]` 语义输入映射为 `[B, T, d_CV2]` 语音条件候选，并输出 `[B, T, 3]` 的时长／基频／能量辅助预测。默认主干为 4 层、512 维、8 头、FFN 2048；注意力与 FFN 权重合计 **12,582,912**，不含偏置、输入／输出投影和嵌入。
+
+- 情绪、授权音色和状态嵌入经逐层 FiLM 注入；块内双向注意，块间只能读取当前与过去块。
+- `use_cache=True` 时每次调用必须提交一个或多个完整新块；后续调用的首个 `chunk_id` 必须大于缓存最后块，禁止把同一块拆到多个增量调用。
+- 缓存路径不接受 padding；完整前向支持布尔 `attention_mask`，被屏蔽位置的条件与韵律输出为零。
+- `pack_condition_chunk` 在封装 `[T_chunk, d_CV2]` 条件时丢弃非当前 `generation_id`，保留块号、代次和文本范围。
+- 运行 `npm run test:voice-cond` 或 `python tests/xim-voice-cond-check.py`。当前 11／11 项通过，覆盖完整／增量一致性、因果隔离、FiLM、梯度、掩码、参数计数、非法输入和失效代次。
+
+```python
+from training.xim_voice_cond import XimVoiceCondConfig, XimVoiceCondV1
+
+config = XimVoiceCondConfig(d_xim=4096, d_cv2=1024)
+model = XimVoiceCondV1(config)
+# semantic: float[B, T, 4096]; chunk_ids / emotion_id / speaker_id / state_id: long
+# output.condition: [B, T, 1024]; output.prosody: [B, T, 3]
+```
+
+这里只有模型结构与无权重契约测试，**尚未进行语音训练，也未接入 CosyVoice 2**。`d_CV2` 仍须按真实上游接口确认；这些测试不证明首音、RTF、自然度、CER、音色一致性、取消成本或全双工效果。

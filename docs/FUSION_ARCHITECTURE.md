@@ -68,7 +68,7 @@ flowchart TD
 
 ### 3.1 XimVoiceCond-v1 目标架构（NOT_TRAINED）
 
-XimVoiceCond-v1 是回复语义到语音合成条件之间的**轻量级条件对齐模型**，不直接生成音频。以下均为待训练、待消融的目标配置，不是已有权重或实测结果。
+XimVoiceCond-v1 是回复语义到语音合成条件之间的**轻量级条件对齐模型**，不直接生成音频。[独立 PyTorch 模块](../training/xim_voice_cond.py)已实现，[11 项张量契约测试](../tests/xim-voice-cond-check.py)通过；这仍不是已有训练权重、CosyVoice 2 集成或语音质量实测结果。以下均为待训练、待消融的目标配置。
 
 ```mermaid
 flowchart LR
