@@ -6,7 +6,7 @@
 
 ## 1. 全链路模型总图
 
-蓝色为已有神经网络模型，紫色为待训练的自研模块，灰色为规则、工程控制或数值求解器。图中 CosyVoice 2 是目标合成组件，尚未部署或完成 Xim 集成测试。
+蓝色为已有神经网络模型，紫色为待训练的 xim 模块，灰色为规则、工程控制或数值求解器。图中 CosyVoice 2 是目标合成组件，尚未部署或完成 Xim 集成测试。
 
 ```mermaid
 flowchart TD
@@ -166,20 +166,20 @@ XimVoiceCond-v1 尚未训练；本轮 dry-run 使用接口测试替身，**未�
 
 ## 6. LiveBridge 跨模态融合目标（未训练、未集成）
 
-目标架构用 Mimi、xim-chat-v1 与 CosyVoice 2 加自研跨模态适配层，形成共享语义表示；不是权重相加，也不把三个服务简单串联等同于融合模型。完整结构、张量契约与训练阶段见 **[融合模型设计](FUSION_ARCHITECTURE.md)**。
+目标架构用 Mimi、xim-chat-v1 与 CosyVoice 2 加xim 跨模态适配层，形成共享语义表示；不是权重相加，也不把三个服务简单串联等同于融合模型。完整结构、张量契约与训练阶段见 **[融合模型设计](FUSION_ARCHITECTURE.md)**。
 
 ```mermaid
 flowchart TD
     AUDIO[持续用户音频] --> AEC[AEC / 降噪 / VAD]
     REF[设备播放参考] --> AEC
     AEC --> MIMI[Mimi 用户音频编码器<br/>音频前端 + Transformer + RVQ<br/>仅编码 · 24 kHz · 12.5 Hz · 80 ms]
-    MIMI --> PROJ[自研音频投影层<br/>LayerNorm + MLP]
-    PROJ --> ADAPTER[自研因果时序适配器<br/>因果 Transformer + 有界缓存]
+    MIMI --> PROJ[xim 音频投影层<br/>LayerNorm + MLP]
+    PROJ --> ADAPTER[xim 时序适配器<br/>因果 Transformer + 有界缓存]
     TEXT[文字／确认转写] --> ALIGN[共享语义表示对齐]
     ADAPTER --> ALIGN
     STATE[会话树 + 输出代次<br/>播放采样时钟 + 任务状态] --> ALIGN
     ALIGN --> XIM[xim-chat-v1 共享语义工作区<br/>Qwen3-8B · 36 层 · LoRA rank 16]
-    XIM --> POLICY[自研轮次行为头<br/>continue · backchannel · hold<br/>yield · correct · repair]
+    XIM --> POLICY[xim 六动作分类头<br/>continue · backchannel · hold<br/>yield · correct · repair]
     XIM --> CHAT[增量文字与情绪段落]
     CHAT --> VPROJ[XimVoiceCond-v1]
     VPROJ --> CV2[CosyVoice 2<br/>FSQ + 文本—语音 LM<br/>chunk-aware causal flow matching]
@@ -201,7 +201,7 @@ flowchart TD
 ### 6.1 模型融合与职责
 
 - **Mimi**：只提供用户音频编码表示，不承担中文语义、会议规划或物理控制；不使用 Mimi 解码器，也不把 Moshi 当成 Xim 模型。
-- **自研音频投影＋因果时序适配器**：将音频表示映射到语言表示空间，只读取过去和当前帧，与文字及会话状态对齐；目前尚未训练或集成。
+- **xim 音频投影＋因果时序适配器**：将音频表示映射到语言表示空间，只读取过去和当前帧，与文字及会话状态对齐；目前尚未训练或集成。
 - **xim-chat-v1**：以现有 Qwen3-8B＋LoRA SFT 检查点初始化，作为共享语义工作区，统一产生回复、六动作行为与 `ToolPlan`；不是可随意替换的占位符。
 - **XimVoiceCond-v1＋CosyVoice 2**：把回复、情绪与经授权音色条件接入 FSQ、文本—语音 LM 和 chunk-aware causal flow matching 合成链路；接口需按真实张量契约实现，未部署、未测。
 - **会议与场景校验器**：复用当前受限 API 的对象、坐标、版本和确认约束，再增加任务代次与取消状态。模型不能自行授予工具权限。

@@ -118,20 +118,20 @@ flowchart LR
 
 ## 4. 创业目标：跨模态融合（尚未训练或集成）
 
-目标架构采用新的语音理解与合成组件，现有级联 Demo 仅作为工程对照；目标与当前实现不得混写。Mimi、xim-chat-v1 与 CosyVoice 2 通过自研适配层共享语义表示，不把权重直接相加，也不把简单服务串联称为已融合模型。
+目标架构采用新的语音理解与合成组件，现有级联 Demo 仅作为工程对照；目标与当前实现不得混写。Mimi、xim-chat-v1 与 CosyVoice 2 通过xim 适配层共享语义表示，不把权重直接相加，也不把简单服务串联称为已融合模型。
 
 ```mermaid
 flowchart TD
     AUDIO[持续用户音频] --> AEC[AEC／降噪／VAD]
     REF[设备播放参考] --> AEC
     AEC --> MIMI[Mimi 用户音频编码器<br/>音频前端 + Transformer + RVQ<br/>仅编码 · 24 kHz · 12.5 Hz · 80 ms]
-    MIMI --> PROJ[自研音频投影层<br/>LayerNorm + MLP]
-    PROJ --> ADAPT[自研因果时序适配器<br/>因果 Transformer + 有界缓存]
+    MIMI --> PROJ[xim 音频投影层<br/>LayerNorm + MLP]
+    PROJ --> ADAPT[xim 时序适配器<br/>因果 Transformer + 有界缓存]
     TEXT[文字／确认转写] --> ALIGN[共享语义表示对齐]
     ADAPT --> ALIGN
     STATE[会话树 + 输出代次 + 播放采样时钟] --> ALIGN
     ALIGN --> XIM[xim-chat-v1 共享语义工作区<br/>Qwen3-8B · 36 层 · LoRA rank 16]
-    XIM --> POLICY[自研轮次行为头<br/>continue · backchannel · hold<br/>yield · correct · repair]
+    XIM --> POLICY[xim 六动作分类头<br/>continue · backchannel · hold<br/>yield · correct · repair]
     XIM --> SEG[增量文字与情绪段落]
     SEG --> VPROJ[XimVoiceCond-v1]
     VPROJ --> CV2[CosyVoice 2<br/>FSQ + 文本—语音 LM<br/>chunk-aware causal flow matching]
@@ -149,7 +149,7 @@ flowchart TD
 候选、证据与边界：
 
 - [Mimi／Moshi](https://github.com/kyutai-labs/moshi)：目标链路只采用 Mimi 用户音频编码器；上游说明为全流式、80 ms 帧级表示。2026-11-23 本机 Windows CPU 独立微基准为 n=10、3.84 秒合成音频编码 P50 3793.193 ms／P95 4765.936 ms；不证明实时、中文语义、重建音质或 LiveBridge 集成。
-- **自研适配层**：音频投影、因果时序适配器、轮次行为头和 XimVoiceCond-v1 都是待训练模块；维度与接口必须按实际模型张量契约实现，不虚构融合参数或检查点。
+- **xim 适配层**：音频投影、因果时序适配器、轮次行为头和 XimVoiceCond-v1 都是待训练模块；维度与接口必须按实际模型张量契约实现，不虚构融合参数或检查点。
 - [CosyVoice 2](https://github.com/FunAudioLLM/CosyVoice)：FSQ、文本—语音 LM 与 chunk-aware causal flow matching 的合成候选；增量文本、可听首音、自然度、取消与并发均未在 Xim 实测。
 - [SpeechTokenizer（ICLR 2024）](https://proceedings.iclr.cc/paper_files/paper/2024/hash/86d1ab582afb247ccaa84bec4a7e24f7-Abstract-Conference.html)：仅作 RVQ 语义／声学解耦对照，不作为原生流式能力证据。
 - [Moshi](https://github.com/kyutai-labs/moshi)：仅作独立原生双音频流研究参考，中文效果、许可与算力需独立评估。

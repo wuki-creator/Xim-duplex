@@ -6,13 +6,13 @@
 
 ## 1. 融合的定义
 
-Xim 采用 **Mimi 用户音频编码器＋自研跨模态适配层＋xim-chat-v1＋CosyVoice 2**。融合指让语音、文字、轮次、任务与已播放状态通过可训练投影进入同一语义工作区，并用联合目标训练适配参数；不是把不同模型的权重直接相加，也不只是把三个独立服务串起来。
+Xim 采用 **Mimi 用户音频编码器＋xim 跨模态适配层＋xim-chat-v1＋CosyVoice 2**。融合指让语音、文字、轮次、任务与已播放状态通过可训练投影进入同一语义工作区，并用联合目标训练适配参数；不是把不同模型的权重直接相加，也不只是把三个独立服务串起来。
 
 上游模型保持各自来源、权重和许可。近期交付物应是可复现的适配器与组合检查点清单；只有完成实际训练、导出和加载验证后，才可称为“已融合模型”。
 
 ## 2. 总图
 
-蓝色为已有上游模型，紫色为拟训练的自研适配模块，灰色为规则、工程控制或数值求解器。
+蓝色为已有上游模型，紫色为拟训练的xim 适配模块，灰色为规则、工程控制或数值求解器。
 
 ```mermaid
 flowchart TD
@@ -20,14 +20,14 @@ flowchart TD
     REF[设备播放参考] --> AEC
     AEC --> MIMI[Mimi 用户音频编码器<br/>音频前端 + Transformer + RVQ<br/>24 kHz · 12.5 Hz · 80 ms]
     TEXT[文字／确认转写] --> TOK[Qwen 文本 Tokenizer]
-    MIMI --> PROJ[自研音频投影层<br/>LayerNorm + MLP]
-    PROJ --> TEMP[自研因果时序适配器<br/>因果 Transformer + 有界缓存]
+    MIMI --> PROJ[xim 音频投影层<br/>LayerNorm + MLP]
+    PROJ --> TEMP[xim 时序适配器<br/>因果 Transformer + 有界缓存]
     TOK --> ALIGN[共享语义表示对齐]
     TEMP --> ALIGN
     STATE[会话树／输出代次／任务状态<br/>已播放采样前缀] --> ALIGN
     ALIGN --> XIM[xim-chat-v1 共享语义工作区<br/>Qwen3-8B Decoder-only Transformer<br/>36 层 · 冻结基座 + LoRA rank 16]
 
-    XIM --> TURN[自研轮次行为头<br/>continue · backchannel · hold<br/>yield · correct · repair]
+    XIM --> TURN[xim 六动作分类头<br/>continue · backchannel · hold<br/>yield · correct · repair]
     XIM --> SEG[增量文字与情绪段落]
     XIM --> PLAN[结构化 ToolPlan 提案<br/>meeting / scene / talk]
     SEG --> VPROJ[XimVoiceCond-v1<br/>文本／情绪／音色条件对齐]

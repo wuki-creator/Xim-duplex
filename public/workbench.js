@@ -10,7 +10,7 @@ refresh();
 fetch('/api/bootstrap').then(r=>{if(!r.ok)throw Error();return r.json();}).then(x=>{
   boot=x;
   const params=new URLSearchParams(location.search),command=params.get('command'),task=params.get('task')||'';
-  if(command){history.replaceState(null,'','/workbench.html');acceptTask(task,command);}
+  if(command){window.history.replaceState(null,'','/workbench.html');acceptTask(task,command);}
 }).catch(()=>log('暂时连不上本机服务。','error'));
 
 function log(text,role='assistant',withVoice=false){

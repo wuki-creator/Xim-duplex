@@ -12,18 +12,23 @@ import {MeetingService,MeetingError} from './meeting.mjs';
 import {localChat,localSpeech,loopbackUrl} from './local-models.mjs';
 import {predictTurn,TurnReleaseGate} from './turn-completion.mjs';
 import {routeVoiceTask} from './voice-task-router.mjs';
+const assets=new Set(['index.html','app.js','speech-queue.js','dialogue-state.js','duplex-policy.js','duplex-controller.js','interaction-log.js','room.css','style.css','robot3d.js','voice-client.js','capture-worklet.js','workbench.html','workbench.css','workbench.js','world.js','meeting.html','meeting.css','meeting-ui.js','vendor/cannon-es.js','vendor/three.module.js','vendor/three.core.js','media/xim-demo.mp4','media/poster.png']);
+const mediaTypes={'.html':'text/html; charset=utf-8','.css':'text/css','.js':'application/javascript','.mp4':'video/mp4','.png':'image/png'};
 const root=path.dirname(fileURLToPath(import.meta.url));
 const cliPortIndex=process.argv.findIndex(value=>value==='--port');
 const cliPort=cliPortIndex>=0?process.argv[cliPortIndex+1]:null;
 const port=Number(cliPort||process.env.PORT||8788);
 if(!Number.isInteger(port)||port<1||port>65535)throw Error('Invalid port');
-let asrConfig={};
-try {asrConfig=JSON.parse(await fs.readFile(path.join(root,'private/asr.json'),'utf8'));}catch{}
+const smallModel=process.argv.includes('--small-model');
+async function privateConfig(file){
+  if(smallModel)return {};
+  try{return JSON.parse(await fs.readFile(path.join(root,'private',file),'utf8'));}catch{return {};}
+}
+const [asrConfig,workbenchConfig,localConfig,turnConfig]=await Promise.all(
+  ['asr.json','workbench.json','local-models.json','turn-model.json'].map(privateConfig)
+);
 const asrURL=process.env.ASR_URL||asrConfig.url||'http://127.0.0.1:8791';
-let workbenchConfig={};
-try{workbenchConfig=JSON.parse(await fs.readFile(path.join(root,'private/workbench.json'),'utf8'));}catch{}
 const computeRemote=process.env.XIM_COMPUTE_URL||workbenchConfig.compute_url||'';
-let localConfig={};try{localConfig=JSON.parse(await fs.readFile(path.join(root,'private/local-models.json'),'utf8'));}catch{}
 const localChatUrl=process.env.XIM_LOCAL_CHAT_URL||localConfig.chat_url||'';
 const localChatModel=process.env.XIM_LOCAL_CHAT_MODEL||localConfig.chat_model||'';
 const localTtsUrl=process.env.XIM_LOCAL_TTS_URL||localConfig.tts_url||'';
@@ -31,7 +36,6 @@ const localVoice=process.env.XIM_LOCAL_VOICE||localConfig.tts_voice||'default';
 const localTtsModel=process.env.XIM_LOCAL_TTS_MODEL||localConfig.tts_model||'';
 const localImageUrl=process.env.XIM_LOCAL_IMAGE_URL||localConfig.image_url||'';
 const localImageModel=process.env.XIM_LOCAL_IMAGE_MODEL||localConfig.image_model||'';
-let turnConfig={};try{turnConfig=JSON.parse(await fs.readFile(path.join(root,'private/turn-model.json'),'utf8'));}catch{}
 const turnUrl=process.env.XIM_TURN_URL??turnConfig.url??'';
 for(const url of [asrURL,localChatUrl,localTtsUrl,localImageUrl,turnUrl].filter(Boolean))loopbackUrl(url,'/');
 let workbenchBusy=0,imageBusy=false;
@@ -113,7 +117,7 @@ const server=http.createServer(async(req,res)=>{
           result={segments:[{text:'场景指令已准备好，正在交给物理工作台处理。',emotion:'warm'}],task:{kind:'workbench',id:taskId,input:route.input,href:'/workbench.html?task='+taskId+'&command='+encodeURIComponent(route.input)}};
         }else{
           const history=Array.isArray(b.history)?b.history.slice(-10).filter(m=>m&&['user','assistant'].includes(m.role)&&typeof m.content==='string'&&m.content.length<=2000):[];
-          result=await localChat({url:localChatUrl,model:localChatModel,text:b.text,history,interruption:b.interruption,styleInstruction:styles.instruction,signal:controller.signal});
+          result=await localChat({url:localChatUrl,model:localChatModel,text:b.text,history,interruption:b.interruption,styleInstruction:styles.instruction,compact:smallModel,signal:controller.signal});
         }
         const id=crypto.randomUUID();replies.set(id,{prompt:b.text,segments:result.segments,at:Date.now(),policy:styles.id});
         while(replies.size>100)replies.delete(replies.keys().next().value);
@@ -148,11 +152,10 @@ const server=http.createServer(async(req,res)=>{
     }
     return send(res,404,{error:'NOT_FOUND'});
   }
-  const assets=new Set(['index.html','app.js','speech-queue.js','dialogue-state.js','duplex-policy.js','duplex-controller.js','interaction-log.js','room.css','style.css','robot3d.js','voice-client.js','capture-worklet.js','workbench.html','workbench.css','workbench.js','world.js','meeting.html','meeting.css','meeting-ui.js','vendor/cannon-es.js','vendor/three.module.js','vendor/three.core.js','media/xim-demo.mp4','media/poster.png']);
   const name=url.pathname==='/'?'index.html':url.pathname.slice(1);
   if(!assets.has(name)||!['GET','HEAD'].includes(req.method))return send(res,404,{error:'NOT_FOUND'});
   const bytes=await fs.readFile(name==='vendor/cannon-es.js'?path.join(root,'node_modules/cannon-es/dist/cannon-es.js'):path.join(root,'public',name));
-  const mime={'.html':'text/html; charset=utf-8','.css':'text/css','.js':'application/javascript','.mp4':'video/mp4','.png':'image/png'}[path.extname(name)];
+  const mime=mediaTypes[path.extname(name)];
   const images=name==='workbench.html'?' https:':'';
   const headers={'Content-Type':mime,'Cache-Control':'no-cache','Content-Length':bytes.length,'X-Content-Type-Options':'nosniff','Content-Security-Policy':`default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; media-src 'self' blob:; img-src 'self' data:${images}; frame-ancestors 'none'`};
   if(mime==='video/mp4'){

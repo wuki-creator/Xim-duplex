@@ -98,6 +98,14 @@ def generate_reply(tokenizer, model, messages, limit, *, device, max_input_token
 
 
 def make_handler(*, tokenizer, model, served_model, base_model, adapter, max_input_tokens, inference_mode):
+    def generate(messages, limit):
+        return generate_reply(tokenizer, model, messages, limit, device="cuda:0",
+                              max_input_tokens=max_input_tokens, inference_mode=inference_mode)
+
+    return chat_handler(generate, served_model, base_model, adapter)
+
+
+def chat_handler(generate, served_model, base_model, adapter=None):
     lock = threading.Lock()
 
     class Handler(BaseHTTPRequestHandler):
@@ -133,8 +141,7 @@ def make_handler(*, tokenizer, model, served_model, base_model, adapter, max_inp
                 if not lock.acquire(timeout=30):
                     return self.send_json(503, {"error": "busy"})
                 try:
-                    result = generate_reply(tokenizer, model, messages, limit, device="cuda:0",
-                                            max_input_tokens=max_input_tokens, inference_mode=inference_mode)
+                    result = generate(messages, limit)
                 finally:
                     lock.release()
                 self.send_json(200, result)

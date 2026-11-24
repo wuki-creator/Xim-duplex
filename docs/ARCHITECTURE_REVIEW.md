@@ -29,14 +29,14 @@ flowchart LR
     MIC[麦克风阵列] --> AEC[AEC + NS + VAD]
     REF[播放参考信号] --> AEC
     AEC --> MIMI[Mimi 用户音频编码器<br/>音频前端 + Transformer + RVQ]
-    MIMI --> PROJ[自研音频投影层<br/>LayerNorm + MLP]
-    PROJ --> ADAPT[自研因果时序适配器<br/>因果 Transformer]
+    MIMI --> PROJ[xim 音频投影层<br/>LayerNorm + MLP]
+    PROJ --> ADAPT[xim 时序适配器<br/>因果 Transformer]
     TEXT[文字／确认转写] --> ALIGN[共享语义表示对齐]
     ADAPT --> ALIGN
     STATE[会话树 + 输出代次 + 播放采样时钟] --> ALIGN
     ALIGN --> XIM[xim-chat-v1<br/>Qwen3-8B · 36 层 · LoRA rank 16]
-    XIM --> POLICY[自研六动作轮次行为头<br/>continue / backchannel / hold<br/>yield / correct / repair]
-    XIM --> VPROJ[自研语音条件投影]
+    XIM --> POLICY[xim 六动作分类头<br/>continue / backchannel / hold<br/>yield / correct / repair]
+    XIM --> VPROJ[xim 语音条件投影]
     VPROJ --> TTS[CosyVoice 2<br/>FSQ + 文本—语音 LM + causal flow matching]
     TTS --> PLAY[可取消音频块队列 + 固定附和库]
     POLICY --> PLAY

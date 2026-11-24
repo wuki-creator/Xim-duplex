@@ -29,9 +29,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, #messages:foc
 .brand-mark {display:block;width:28px;height:21px;border-radius:8px;position:relative;border:1px solid #a4bda6;background:#314a3c}
 .brand-mark:before,.brand-mark:after {content:"";width:3px;height:7px;border-radius:999px;background:#f6d092;position:absolute;top:6px}
 .brand-mark:before {left:8px}.brand-mark:after {right:8px}
-#connection {display:inline-flex;align-items:center;gap:7px;color:#c5d2c8;white-space:nowrap;font-size:11px}
-#connection:before,.eyebrow span {content:"";display:inline-block;width:6px;height:6px;border-radius:100%;background:#b3d6b5;box-shadow:0 0 10px #a1d6ae77}
-#connection[data-offline]:before {background:#dbba8d;box-shadow:none}
 .voice-options{display:flex;align-items:center;gap:9px;font-size:12px;color:#bfd4c7;margin-bottom:6px}
 .voice-options select{background:#16241f;color:#e4eee5;border:1px solid #42574a;border-radius:8px;padding:6px}
 #voicePrivacy{font-size:11px;color:#c0d1c5;margin:0 0 8px}
@@ -50,9 +47,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, #messages:foc
   padding:clamp(24px,4.2vw,58px) clamp(22px,5vw,84px);
 }
 .presence {position:relative;min-width:0;text-align:center}
-.room-intro .eyebrow {margin:0;display:flex;align-items:center;justify-content:center;gap:9px;color:#c5d2c8;font:600 10px/1.4 Arial,sans-serif;letter-spacing:.26em}
-.room-intro h1 {font:600 clamp(32px,3.7vw,57px)/1.16 "Songti SC","SimSun","Microsoft YaHei",serif;letter-spacing:.025em;margin:13px 0 6px}
-.room-intro p:last-child {font-size:13px;color:var(--muted);margin:0}
 .tabletop {position:relative;isolation:isolate;display:grid;place-items:center;margin:5px auto -5px;width:100%;max-width:528px}
 .tabletop-ring {position:absolute;left:10%;right:10%;top:17%;bottom:14%;max-width:330px;margin:auto;border-radius:50%;border:1px solid #b6d3bd24;background:radial-gradient(circle,#b7deac22,transparent 70%);pointer-events:none}
 .tabletop-ring:after {content:"";position:absolute;inset:13%;border:1px solid #b6d3bd15;border-radius:50%}
@@ -82,12 +76,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, #messages:foc
   box-shadow:0 25px 55px #080e0c70, inset 0 1px 0 #d1edd921;
   backdrop-filter:blur(16px);
 }
-.workspace nav {width:fit-content;max-width:100%;align-items:center;gap:3px;margin:0;border:1px solid var(--line);border-radius:99px;background:#101b18b3;padding:3px}
-.workspace nav button {white-space:nowrap;flex:0 1 auto;border:0;min-height:38px;padding:6px 13px;border-radius:99px;color:#bfd0c3;font-size:12px}
-.workspace nav button.active {border:0;background:#c1dec738;color:#f3f7ef}
 #chatPanel {flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
 .chat-heading {padding:5px 0 2px;justify-content:space-between}
-.chat-heading h2 {font-size:22px;font-weight:600;line-height:1.3;margin:11px 0}
+.chat-heading h1 {font-size:22px;font-weight:600;line-height:1.3;margin:11px 0}
 .chat-heading>span {color:#d1ddd3;border:1px solid var(--line);border-radius:999px;padding:3px 8px;flex-shrink:0}
 .thread {position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
 #messages {
@@ -126,15 +117,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, #messages:foc
 .key-guide {margin:5px 2px 0;color:#9eb7a9;font-size:10px}
 #error {min-height:0;margin:0;color:#ffd2ac;overflow-wrap:anywhere}
 #error:not(:empty) {margin:6px 0 0}
-.task-card {border-color:#9bbfa38c;font-size:13px}
-.task-card button,.feedback-buttons button {min-height:36px}
-.feedback-buttons button {color:#c3d6c8;padding:2px 7px}
-.utility-panel {flex:1;overflow:auto;min-height:0;padding:6px 2px}
-.utility-panel h2 {font-size:22px}
-.utility-panel>p,.utility-panel .caption {color:var(--muted)}
+.feedback-buttons button {min-height:36px;color:#c3d6c8;padding:2px 7px}
 input:not([type=checkbox]),select {background:#101e19;color:var(--ink);border:1px solid var(--line)}
-.setting select {max-width:100%;border-radius:8px;padding:6px}
-#timer {color:#cae3c9}
 .room-footer {font-size:11px;color:#abc3b0;border-color:#b0ccb12b}
 .sr-only {position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 @media (max-width:850px) {
@@ -144,7 +128,6 @@ input:not([type=checkbox]),select {background:#101e19;color:var(--ink);border:1p
   .brand b {font-size:23px}
   #mute {padding-inline:8px}
   .workspace {height:560px;max-height:none;padding-inline:14px}
-  .room-intro h1 {font-size:34px}
   #pet {height:270px}
   .stage-caption {max-width:380px}
   .key-guide {display:none}
@@ -153,11 +136,10 @@ input:not([type=checkbox]),select {background:#101e19;color:var(--ink);border:1p
   .brand b {font-size:21px}.brand b span {display:none}
   .room-header,.room-footer {padding-inline:12px}
   .room {padding-inline:9px}
-  .workspace nav button {padding-inline:10px}
 }
 @media (prefers-reduced-motion:reduce) {
   #messages article.pending p:before {animation:none}
 }
-.voice-tools{display:flex;align-items:center;gap:12px;margin-bottom:10px}.voice-tools span{font-size:11px;color:#bcd6c7}.voice-tools button{white-space:nowrap;font-size:12px}.inline-preferences{display:flex;justify-content:center;gap:18px;font-size:12px;margin-top:10px}.feedback-consent{display:flex;align-items:center;gap:6px;font-size:10px;color:#adc4b4;margin:8px 2px 0}.film-section{text-align:center;padding:0 20px 24px}.film-section>button{color:#c8e5d7;border-color:#9bcdb666;font-size:12px}dialog{background:#101e19;color:#f3f6ef;border:1px solid #91c3a777;border-radius:20px;width:min(920px,94vw);max-height:90vh}dialog::backdrop{background:#04100dde;backdrop-filter:blur(8px)}dialog video{width:100%;border-radius:12px}dialog p{font-size:12px;color:#bbd6c4}#filmClose{float:right}.room-tools>button{white-space:nowrap;padding:7px 10px;font-size:12px}@media(max-width:600px){#connection{display:none}}
+.voice-tools{display:flex;align-items:center;gap:12px;margin-bottom:10px}.voice-tools span{font-size:11px;color:#bcd6c7}.voice-tools button{white-space:nowrap;font-size:12px}.inline-preferences{display:flex;justify-content:center;gap:18px;font-size:12px;margin-top:10px}.feedback-consent{display:flex;align-items:center;gap:6px;font-size:10px;color:#adc4b4;margin:8px 2px 0}.film-section{text-align:center;padding:0 20px 24px}.film-section>button{color:#c8e5d7;border-color:#9bcdb666;font-size:12px}dialog{background:#101e19;color:#f3f6ef;border:1px solid #91c3a777;border-radius:20px;width:min(920px,94vw);max-height:90vh}dialog::backdrop{background:#04100dde;backdrop-filter:blur(8px)}dialog video{width:100%;border-radius:12px}dialog p{font-size:12px;color:#bbd6c4}#filmClose{float:right}.room-tools>button{white-space:nowrap;padding:7px 10px;font-size:12px}
 
 .voice-diagnostics{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:12px 0;font-size:12px;color:var(--muted,#a5b9ad)}.voice-diagnostics[hidden]{display:none}.voice-diagnostics label{display:flex;align-items:center;gap:6px}.voice-diagnostics select{max-width:220px;background:#16241f;color:#e4eee5;border:1px solid #42574a;border-radius:8px;padding:6px}.voice-diagnostics meter{width:76px}.voice-diagnostics p{flex-basis:100%;margin:0;line-height:1.6}.voice-diagnostics button{font-size:12px;padding:7px 10px}.voice-diagnostics button:disabled{opacity:.4}@media(max-width:600px){.voice-diagnostics select{max-width:170px}}

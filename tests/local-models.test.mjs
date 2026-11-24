@@ -123,3 +123,16 @@ test('the local style policy reaches the model with bounded scope while user obs
   const malformed=await capture({toString(){throw Error('do not coerce policy objects');}});
   assert.ok(!malformed.messages[0].content.includes('本地表达风格'));
 });
+
+test('compact CPU chat sends the user utterance directly and keeps task routing on the server',async()=>{
+  const history=[{role:'assistant',content:'上次聊到散步。'}];
+  const reply=await localChat({url:'http://localhost:9999',model:'cpu',text:'今天下雨了',history,compact:true,
+    request:async(_url,options)=>{
+      const body=JSON.parse(options.body);
+      assert.deepEqual(body.messages.slice(1),[...history,{role:'user',content:'今天下雨了'}]);
+      assert.equal(body.max_tokens,128);
+      return Response.json({choices:[{finish_reason:'stop',message:{content:'下雨天，你想在家做点什么？'}}]});
+    }});
+  assert.equal(reply.segments[0].text,'下雨天，你想在家做点什么？');
+  assert.equal(reply.task,null);
+});

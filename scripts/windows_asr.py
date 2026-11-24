@@ -2,6 +2,21 @@
 import base64, json, os, queue, shutil, subprocess, threading
 from pathlib import Path
 
+def simplified_chinese(text):
+    """Normalize Whisper Chinese captions before matching Mandarin task commands."""
+    import ctypes
+    if not text:
+        return text
+    # LCMapStringW counts UTF-16 code units, including the terminator for -1.
+    convert = ctypes.windll.kernel32.LCMapStringW
+    size = convert(0x0804, 0x02000000, text, -1, None, 0)
+    if size:
+        output = ctypes.create_unicode_buffer(size)
+        if convert(0x0804, 0x02000000, text, -1, output, size):
+            return output.value
+    return text
+
+
 class WindowsASR:
     def __init__(self): self.process=None;self.start()
     def start(self):
