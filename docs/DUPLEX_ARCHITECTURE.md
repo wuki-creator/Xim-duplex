@@ -31,15 +31,17 @@
 
 ## 推荐的两条实现路线
 
-### 近期：Xim LiveBridge 可替换流式级联
+### 近期：Xim LiveBridge 无 MOSS 跨模态融合
 
-持续麦克风与播放参考 → AEC／降噪／VAD → Mimi 流式用户音频编码（仅编码）→ 自研流式语义—轮次适配器 → LiveBridge 六动作决策 → 可替换流式 LLM → CosyVoice 2 分块流式合成＋固定附和音频库 → 可取消播放队列与实际播放采样反馈。输入始终运行，不能等输出结束才监听。
+持续麦克风与播放参考 → AEC／降噪／VAD → **Mimi 用户音频编码器**（仅编码）→ **自研音频投影＋因果时序适配器** → 文字／任务／播放状态共享语义对齐 → **xim-chat-v1** → 六动作轮次行为、文字与情绪、`ToolPlan`；回复再经**自研语音条件投影 → CosyVoice 2** 分块合成，与固定附和音频库共同进入可取消播放队列，实际播放采样反馈回写会话状态。输入始终运行，不能等输出结束才监听。
 
-语音任务也进入同一状态模型：流式 LLM 只提出结构化 `ToolPlan`，服务端再按 meeting／scene／talk 校验权限和参数；会议沿用版本化确认，场景沿用对象、坐标和固定求解器白名单。任务状态以 proposed／approved／running／done／failed 事件回流会话树，纠正可撤销未执行提案，但不能虚构已完成计算已被撤销。当前仓库已打通整句语音到会议和虚拟工作台的工程路由；流式 ToolPlan 闭环仍是目标设计，完整分工见[全链路模型细节](VOICE_TASK_PIPELINE.md)。
+这里的融合不是模型权重直接相加，也不是把三个服务简单串联。Mimi 提供帧级音频表示，投影层和因果 Transformer 适配器将其映射到 xim-chat-v1 的表示空间；Qwen3-8B 基座保持冻结，现有 LoRA 与适配器按计划联合训练；CosyVoice 2 先冻结，只训练语音条件投影。完整结构、接口和 P0–P4 训练阶段见[融合模型设计](FUSION_ARCHITECTURE.md)。当前没有融合检查点或跨模态训练结果。
+
+语音任务也进入同一状态模型：xim-chat-v1 只提出结构化 `ToolPlan`，服务端再按 meeting／scene／talk 校验权限和参数；会议沿用版本化确认，场景沿用对象、坐标和固定求解器白名单。任务状态以 proposed／approved／running／done／failed 事件回流会话树，纠正可撤销未执行提案，但不能虚构已完成计算已被撤销。当前仓库已打通整句语音到会议和虚拟工作台的工程路由；流式 ToolPlan 闭环仍是目标设计，完整分工见[全链路模型细节](VOICE_TASK_PIPELINE.md)。
 
 [Mimi／Moshi](https://github.com/kyutai-labs/moshi) 提供全流式音频编码依据；本方案只采用编码器，不把离散音频表示等同于中文语义理解。[CosyVoice 2](https://github.com/FunAudioLLM/CosyVoice) 是 FSQ、文本—语音 LM 与 chunk-aware causal flow matching 的合成候选。SpeechTokenizer 仅作 RVQ 语义／声学解耦对照。上游能力不能直接套用作 Xim 成绩。
 
-适配器输出 interim／final 文本、韵律与轮次事件；临时结果只用于预判，不直接提交开放回答。LiveBridge 联合会话树、输出代次和播放采样时钟，输出 continue / backchannel / hold / yield / correct / repair。证据不足时先 hold，超时必须恢复或让话；纠正与取消不得删除最新用户意图。Mimi 本机独立编码微基准已完成，但目标链路、CosyVoice 2、AEC 和实体玩偶仍未集成或未测。
+适配器使用临时转写、最终转写、韵律和轮次监督；临时结果只用于预判，不直接提交开放回答。轮次行为头联合会话树、输出代次和播放采样时钟，输出 continue / backchannel / hold / yield / correct / repair。证据不足时先 hold，超时必须恢复或让话；纠正与取消不得删除最新用户意图。Mimi 本机独立编码微基准已完成，但融合模型、CosyVoice 2、AEC 和实体玩偶仍未集成或未测。
 
 ### 研究：原生双流语音模型
 

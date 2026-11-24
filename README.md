@@ -6,19 +6,49 @@
 
 [观看 ChatCut 演示成片](public/media/xim-demo.mp4) · [验证记录](docs/VALIDATION.md)
 
-**[语音对话、会议与物理场景全链路模型细节 →](docs/VOICE_TASK_PIPELINE.md)** · [当前模型流程与打断续接](docs/MODEL_FLOW.md) · [原生全双工改造方案](docs/DUPLEX_ARCHITECTURE.md)
+**[无 MOSS 跨模态融合模型 →](docs/FUSION_ARCHITECTURE.md)** · [全链路模型细节](docs/VOICE_TASK_PIPELINE.md) · [当前模型流程与打断续接](docs/MODEL_FLOW.md) · [原生全双工改造方案](docs/DUPLEX_ARCHITECTURE.md)
 
 v0.10.0 新增两阶段插话控制：检测到讲话先暂缓播放，附和或未识别片段可续播，纠正、明确让出与新输入才取消旧回答。新增不含录音和原文的交互验证记录导出；[架构与流程](docs/MODEL_FLOW.md)说明已运行组件和待训练网络的区别。
 
 多任务模型 **[xim-chat-v1](docs/XIM_CHAT_V1_MODEL_CARD.md)** 已完成基于 Qwen3-8B 的 SFT 136 步与 GRPO 120 步。当前采用 SFT 检查点，任务模板留出正确率 94% → 100%；GRPO 奖励组无方差，未证明额外收益。[训练记录与运行方法](training/README.md)保留真实指标和限制。
 
-**自托管产品路线。** 不调用 MOSS 或 DeepSeek 云 API。主对话、[会议空间与物理工作台](docs/WORKBENCH_AND_MEETING.md)共用 Xim 的收音链路；当前这台机器使用服务器 Whisper + 自托管语言模型 + MOSS Nano 本地语音，语音服务不可用时回退设备朗读。Xim 条件残差层尚无已训练的适配器权重；状态与限制见[模型架构](docs/XIM_MOSS_ARCHITECTURE.md)。
+**自托管产品路线。** 不调用 MOSS 或 DeepSeek 云 API。主对话、[会议空间与物理工作台](docs/WORKBENCH_AND_MEETING.md)共用 Xim 的收音链路；当前这台机器使用服务器 Whisper + 自托管语言模型 + MOSS Nano 本地语音，语音服务不可用时回退设备朗读。MOSS 只属当前 Demo／历史基线，不是创业目标组件。
 
 2026-11-23 组件实测：3.5359 秒固定音频上，Whisper-small 完整转写 P50 894.005 ms；Smart Turn 服务端 P50 32.630 ms；Qwen3-8B＋SFT 非流式完整回复 P50 483.235 ms；CPU MOSS Nano 完整 WAV 平均 RTF 0.8195。另在本机 Windows CPU 完成 Mimi 独立编码微基准：3.84 秒合成音频，48×80 ms 编码步，n=10，P50 3793.193 ms、P95 4765.936 ms；这不是服务器、实时、语义、音质或集成结果。样本、逐次结果及限制见[组件实测](docs/evaluations/2026-11-23/README.md)，不能解释为真人端到端或重叠语音指标。[附件改造方案审阅](docs/ARCHITECTURE_REVIEW.md)给出采纳、修改与拒绝项。
 
-**创业目标架构独立于上述 Demo。** Xim LiveBridge 拟采用 Mimi 流式用户音频编码（仅编码）→ 自研流式语义—轮次适配器 → continue／backchannel／hold／yield／correct／repair 六动作决策 → 可替换流式 LLM → CosyVoice 2 分块流式合成＋固定附和音频库 → 可取消播放与播放采样反馈。除 Mimi 独立编码微基准外，目标链路、CosyVoice 2、AEC、真人重叠对话和实体玩偶均未集成或未测；不得把上游能力写成本项目效果。
+## 创业目标：无 MOSS 的跨模态融合模型
 
-### 当前 Demo：模型结构与数据流
+Xim LiveBridge 采用 **Mimi 用户音频编码器＋自研跨模态适配层＋xim-chat-v1＋CosyVoice 2**。融合是共享语义表示与联合训练，不是把权重直接相加。Mimi 只编码用户音频；自研音频投影与因果时序适配器将语音、文字和会话状态对齐；`xim-chat-v1` 统一生成回复、轮次行为与工具提案；语音条件投影再驱动 CosyVoice 2 合成声音。**融合权重、CosyVoice 2 部署及完整双工链路目前均为 NOT_TRAINED／NOT_INTEGRATED／NOT_TESTED。** 训练步骤与接口见[融合模型设计](docs/FUSION_ARCHITECTURE.md)。
+
+```mermaid
+flowchart TD
+    AUDIO[持续用户音频＋播放参考] --> AEC[AEC／降噪／VAD]
+    AEC --> MIMI[Mimi 用户音频编码器<br/>音频前端 + Transformer + RVQ<br/>24 kHz · 12.5 Hz · 80 ms]
+    MIMI --> PROJ[自研音频投影层<br/>LayerNorm + MLP]
+    PROJ --> TEMP[自研因果时序适配器<br/>因果 Transformer + 有界缓存]
+    TEXT[文字／确认转写] --> ALIGN[共享语义表示对齐]
+    STATE[会话树／播放采样／任务状态] --> ALIGN
+    TEMP --> ALIGN
+    ALIGN --> XIM[xim-chat-v1 共享语义工作区<br/>Qwen3-8B Decoder-only Transformer<br/>36 层 · LoRA rank 16]
+    XIM -->|六动作| TURN[continue · backchannel · hold<br/>yield · correct · repair]
+    XIM -->|文字与情绪段落| VPROJ[自研语音条件投影]
+    VPROJ --> CV2[CosyVoice 2<br/>FSQ + 文本—语音 LM<br/>chunk-aware causal flow matching]
+    CV2 --> PLAY[可取消音频块队列]
+    TURN --> PLAY
+    PLAY -->|实际播放采样反馈| STATE
+    XIM -->|会议／虚拟场景 ToolPlan 提案| CHECK[服务端权限与参数校验]
+    CHECK --> TASK[会议版本化确认／场景固定求解器]
+    TASK --> STATE
+
+    classDef model fill:#e4edff,stroke:#5274b9,color:#17233c;
+    classDef train fill:#eee5ff,stroke:#8260ac,color:#281b39;
+    classDef rule fill:#eef0f2,stroke:#89919b,color:#252a30;
+    class MIMI,XIM,CV2 model;
+    class PROJ,TEMP,ALIGN,TURN,VPROJ train;
+    class AEC,STATE,PLAY,CHECK,TASK rule;
+```
+
+## 当前 Demo（MOSS 历史基线）：模型结构与数据流
 
 蓝色节点是神经网络模型，灰色节点是规则、工程控制或数值求解器。**普通聊天、会议规划和复杂场景指令共用同一个 `xim-chat-v1`，不是三个独立语言模型。**
 

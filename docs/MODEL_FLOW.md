@@ -116,38 +116,46 @@ flowchart LR
 
 目前没有达到策略晋级所需的真人数据。独立的 xim-chat-v1 文字多任务后训练已完成首轮试验，见第 5 节；语音模型自进化仍未完成。服务端现已把本地 active 策略文字实际传入聊天请求，策略记录不等于权重更新。
 
-## 4. 创业目标架构：Xim LiveBridge（尚未集成）
+## 4. 创业目标：无 MOSS 跨模态融合（尚未训练或集成）
 
-目标架构不再使用 MOSS 作为新链路的组件。当前 GitHub Demo 的 MOSS Nano 仅保留为历史基线；目标与当前实现不得混写。
+目标架构不再使用 MOSS 作为新链路的组件。当前 GitHub Demo 的 MOSS Nano 仅保留为历史基线；目标与当前实现不得混写。Mimi、xim-chat-v1 与 CosyVoice 2 通过自研适配层共享语义表示，不把权重直接相加，也不把简单服务串联称为已融合模型。
 
 ```mermaid
 flowchart TD
     AUDIO[持续用户音频] --> AEC[AEC／降噪／VAD]
     REF[设备播放参考] --> AEC
-    AEC --> MIMI[Mimi 流式用户音频编码<br/>仅编码 · 24 kHz · 12.5 Hz]
-    MIMI --> ADAPT[自研流式语义—轮次适配器<br/>interim／final · 韵律 · 轮次事件]
-    ADAPT --> POLICY[LiveBridge 六动作决策<br/>continue · backchannel · hold<br/>yield · correct · repair]
-    POLICY --> STATE[会话树 + 输出代次 + 播放采样时钟]
-    STATE --> GEN[可替换流式 LLM 回复规划器]
-    GEN --> CV2[CosyVoice 2 分块流式合成<br/>＋固定附和音频库]
-    CV2 --> PLAY[可取消音频块队列]
+    AEC --> MIMI[Mimi 用户音频编码器<br/>音频前端 + Transformer + RVQ<br/>仅编码 · 24 kHz · 12.5 Hz · 80 ms]
+    MIMI --> PROJ[自研音频投影层<br/>LayerNorm + MLP]
+    PROJ --> ADAPT[自研因果时序适配器<br/>因果 Transformer + 有界缓存]
+    TEXT[文字／确认转写] --> ALIGN[共享语义表示对齐]
+    ADAPT --> ALIGN
+    STATE[会话树 + 输出代次 + 播放采样时钟] --> ALIGN
+    ALIGN --> XIM[xim-chat-v1 共享语义工作区<br/>Qwen3-8B · 36 层 · LoRA rank 16]
+    XIM --> POLICY[自研轮次行为头<br/>continue · backchannel · hold<br/>yield · correct · repair]
+    XIM --> SEG[增量文字与情绪段落]
+    SEG --> VPROJ[自研语音条件投影]
+    VPROJ --> CV2[CosyVoice 2<br/>FSQ + 文本—语音 LM<br/>chunk-aware causal flow matching]
+    CV2 --> PLAY[可取消音频块队列＋固定附和库]
     PLAY --> ACK[按实际播放采样数确认]
     ACK --> STATE
     ACK --> AEC
     ACK --> FACE[表情与情绪色同步]
     POLICY -->|暂停 / 取消 / 恢复| PLAY
-    RESEARCH[独立研究分支：原生双音频流模型] -.不冒充当前实现.-> GEN
+    XIM --> PLAN[会议／虚拟场景 ToolPlan 提案]
+    PLAN --> CHECK[服务端权限与参数校验]
+    CHECK --> STATE
 ```
 
 候选、证据与边界：
 
 - [Mimi／Moshi](https://github.com/kyutai-labs/moshi)：目标链路只采用 Mimi 用户音频编码器；上游说明为全流式、80 ms 帧级表示。2026-11-23 本机 Windows CPU 独立微基准为 n=10、3.84 秒合成音频编码 P50 3793.193 ms／P95 4765.936 ms；不证明实时、中文语义、重建音质或 LiveBridge 集成。
+- **自研适配层**：音频投影、因果时序适配器、轮次行为头和语音条件投影都是待训练模块；维度与接口必须按实际模型张量契约实现，不虚构融合参数或检查点。
 - [CosyVoice 2](https://github.com/FunAudioLLM/CosyVoice)：FSQ、文本—语音 LM 与 chunk-aware causal flow matching 的合成候选；增量文本、可听首音、自然度、取消与并发均未在 Xim 实测。
 - [SpeechTokenizer（ICLR 2024）](https://proceedings.iclr.cc/paper_files/paper/2024/hash/86d1ab582afb247ccaa84bec4a7e24f7-Abstract-Conference.html)：仅作 RVQ 语义／声学解耦对照，不作为原生流式能力证据。
 - [Moshi](https://github.com/kyutai-labs/moshi)：仅作独立原生双音频流研究参考，中文效果、许可与算力需独立评估。
 - [MOVA 论文](https://arxiv.org/html/2602.08794v2)：同步音视频生成架构，可借鉴时间对齐与跨模态桥接，不是现成的语音对话模型。本项目未加载其权重。
 
-详细改造、训练与验收设计见 [全双工架构说明](DUPLEX_ARCHITECTURE.md)；逐次结果与限制见 [验证记录](VALIDATION.md) 和 [组件实测](evaluations/2026-11-23/README.md)。
+详细融合结构、接口与分阶段训练见 **[融合模型设计](FUSION_ARCHITECTURE.md)**；双工状态与验收定义见 [全双工架构说明](DUPLEX_ARCHITECTURE.md)；逐次结果与限制见 [验证记录](VALIDATION.md) 和 [组件实测](evaluations/2026-11-23/README.md)。
 
 ## 5. xim-chat-v1 离线多任务后训练
 

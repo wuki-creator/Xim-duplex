@@ -157,51 +157,55 @@ flowchart TD
 
 当前没有实体机械臂驱动、安全 PLC、真实碰撞避免、连杆完整碰撞检查或自动绕障，不能用于现实机器人安全控制。
 
-## 6. LiveBridge 创业目标链路（未集成）
+## 6. LiveBridge 无 MOSS 融合目标（未训练、未集成）
 
-目标架构用流式理解、决策、生成和工具状态取代当前整句级联，但不把目标写成已有效果。
+目标架构用 Mimi、xim-chat-v1 与 CosyVoice 2 加自研跨模态适配层，形成共享语义表示；不是权重相加，也不把三个服务简单串联等同于融合模型。完整结构、张量契约与训练阶段见 **[融合模型设计](FUSION_ARCHITECTURE.md)**。
 
 ```mermaid
 flowchart TD
     AUDIO[持续用户音频] --> AEC[AEC / 降噪 / VAD]
     REF[设备播放参考] --> AEC
-    AEC --> MIMI[Mimi 流式用户音频编码器<br/>仅编码 · 24 kHz · 80 ms 帧]
-    MIMI --> ADAPTER[自研流式语义—轮次适配器<br/>interim/final · 韵律 · 轮次事件]
-    ADAPTER --> POLICY[LiveBridge 六动作<br/>continue · backchannel · hold<br/>yield · correct · repair]
-    POLICY --> STATE[会话树 + 输出代次<br/>播放采样时钟 + 任务状态]
-    STATE --> PLANNER[可替换流式 LLM 规划器]
-
-    PLANNER --> CHAT[增量回复文本]
-    CHAT --> CV2[CosyVoice 2 分块流式合成<br/>固定附和音频库]
-    CV2 --> PLAY[可取消音频块队列]
+    AEC --> MIMI[Mimi 用户音频编码器<br/>音频前端 + Transformer + RVQ<br/>仅编码 · 24 kHz · 12.5 Hz · 80 ms]
+    MIMI --> PROJ[自研音频投影层<br/>LayerNorm + MLP]
+    PROJ --> ADAPTER[自研因果时序适配器<br/>因果 Transformer + 有界缓存]
+    TEXT[文字／确认转写] --> ALIGN[共享语义表示对齐]
+    ADAPTER --> ALIGN
+    STATE[会话树 + 输出代次<br/>播放采样时钟 + 任务状态] --> ALIGN
+    ALIGN --> XIM[xim-chat-v1 共享语义工作区<br/>Qwen3-8B · 36 层 · LoRA rank 16]
+    XIM --> POLICY[自研轮次行为头<br/>continue · backchannel · hold<br/>yield · correct · repair]
+    XIM --> CHAT[增量文字与情绪段落]
+    CHAT --> VPROJ[自研语音条件投影]
+    VPROJ --> CV2[CosyVoice 2<br/>FSQ + 文本—语音 LM<br/>chunk-aware causal flow matching]
+    CV2 --> PLAY[可取消音频块队列<br/>固定附和音频库]
     PLAY --> SAMPLES[实际播放采样反馈]
     SAMPLES --> STATE
+    POLICY -->|播放与话轮控制| PLAY
 
-    PLANNER --> TOOLPLAN[结构化 ToolPlan 提案<br/>meeting / scene / talk]
+    XIM --> TOOLPLAN[结构化 ToolPlan 提案<br/>meeting / scene / talk]
     TOOLPLAN --> POLICYCHECK{服务端权限与参数校验}
     POLICYCHECK -->|会议方案| MROOM[虚拟会议与版本化确认]
     POLICYCHECK -->|虚拟场景动作| MSCENE[场景白名单与固定求解器]
     MROOM --> EVENTS[任务事件流<br/>proposed / approved / running / done / failed]
     MSCENE --> EVENTS
     EVENTS --> STATE
-    POLICY -->|停播或纠正| PLAY
     POLICY -->|撤销未执行提案| TOOLPLAN
 ```
 
-### 6.1 目标模型分工
+### 6.1 模型融合与职责
 
-- **Mimi**：只负责用户音频编码，不承担中文语义、会议规划或物理控制。
-- **语义—轮次适配器**：拟把音频表示、识别中间结果与韵律映射为语义事件和轮次事件；目前尚未训练或集成。
-- **LiveBridge**：在语音输出期间决定继续、附和、暂缓、让出、纠正和修复；六动作是交互控制，不是会议或机械臂动作。
-- **流式 LLM 规划器**：生成增量回复或结构化 `ToolPlan` 提案；工具权限仍在模型之外。
-- **会议与场景校验器**：复用当前受限 API 的对象、坐标、版本和确认约束，再增加任务代次与取消状态。
-- **CosyVoice 2**：候选分块流式合成器；未部署、未测可听首音、自然度、取消或并发。
+- **Mimi**：只提供用户音频编码表示，不承担中文语义、会议规划或物理控制；不使用 Mimi 解码器，也不把 Moshi 当成 Xim 模型。
+- **自研音频投影＋因果时序适配器**：将音频表示映射到语言表示空间，只读取过去和当前帧，与文字及会话状态对齐；目前尚未训练或集成。
+- **xim-chat-v1**：以现有 Qwen3-8B＋LoRA SFT 检查点初始化，作为共享语义工作区，统一产生回复、六动作行为与 `ToolPlan`；不是可随意替换的占位符。
+- **自研语音条件投影＋CosyVoice 2**：把回复、情绪与经授权音色条件接入 FSQ、文本—语音 LM 和 chunk-aware causal flow matching 合成链路；接口需按真实张量契约实现，未部署、未测。
+- **会议与场景校验器**：复用当前受限 API 的对象、坐标、版本和确认约束，再增加任务代次与取消状态。模型不能自行授予工具权限。
 
-### 6.2 语音打断与工具状态
+### 6.2 联合训练与状态边界
+
+先冻结 Mimi 和 Qwen 基座，训练音频投影、因果时序适配器与轮次行为头；再联合训练现有 LoRA 的对话／工具目标；随后冻结 CosyVoice 2 单独训练语音条件投影。只有独立基线达标后才考虑选择性联合微调。没有真实跨模态训练与导出检查点前，不宣称融合已经完成。
 
 目标状态下，用户纠正应立即影响未播放音频和未执行任务提案；已经获准的数值计算不能假装“未发生”，应以任务事件返回完成、失败或不可撤销状态。真实硬件若未来接入，必须另有急停、权限、速度／空间限制和安全认证，不能仅依赖 LLM 取消。
 
-Mimi 目前只有本机独立编码微基准：3.84 秒合成音频、48×80 ms 编码步、n=10，P50 3793.193 ms、P95 4765.936 ms；这不是服务器、实时、语义、重建音质或 LiveBridge 集成结果。CosyVoice 2 和上述 ToolPlan 流式闭环均为 **NOT_TESTED**。
+Mimi 目前只有本机独立编码微基准：3.84 秒合成音频、48×80 ms 编码步、n=10，P50 3793.193 ms、P95 4765.936 ms；这不是服务器、实时、语义、重建音质或 LiveBridge 集成结果。CosyVoice 2、融合权重和上述 ToolPlan 流式闭环均为 **NOT_TESTED**。
 
 ## 7. 数据与部署边界
 

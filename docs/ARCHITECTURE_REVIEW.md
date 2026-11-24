@@ -22,27 +22,34 @@ v0.10.0 已落地两阶段控制：检测到讲话先暂停，附和或未识别
 | 块稀疏注意力自动省时 | 只有 mask 不等于加速；需要合适训练、布局和高效率 kernel。 | 先以稠密模型为正确性基线，再用相同输入比较 kernel 级延迟、显存和质量。 |
 | 离线／在线严格二选一 | 桌面产品需要按隐私、延迟和成本动态分工。 | 唤醒、AEC、VAD、基础动作本地；复杂生成可在获授权的边缘／服务器运行；断网保留明确降级能力。 |
 
-## 推荐目标架构：Xim LiveBridge
+## 推荐目标架构：无 MOSS 跨模态融合
 
 ```mermaid
 flowchart LR
     MIC[麦克风阵列] --> AEC[AEC + NS + VAD]
     REF[播放参考信号] --> AEC
-    AEC --> MIMI[Mimi 流式用户音频编码：仅编码]
-    MIMI --> ADAPT[自研流式语义—轮次适配器]
-    ADAPT --> POLICY[LiveBridge 六动作策略<br/>continue / backchannel / hold<br/>yield / correct / repair]
-    POLICY --> STATE[会话树 + 输出代次 + 播放采样时钟]
-    STATE --> LLM[可替换、可取消的流式 LLM]
-    LLM --> TTS[CosyVoice 2 分块流式合成 + 固定附和库]
-    TTS --> PLAY[可取消音频块队列]
+    AEC --> MIMI[Mimi 用户音频编码器<br/>音频前端 + Transformer + RVQ]
+    MIMI --> PROJ[自研音频投影层<br/>LayerNorm + MLP]
+    PROJ --> ADAPT[自研因果时序适配器<br/>因果 Transformer]
+    TEXT[文字／确认转写] --> ALIGN[共享语义表示对齐]
+    ADAPT --> ALIGN
+    STATE[会话树 + 输出代次 + 播放采样时钟] --> ALIGN
+    ALIGN --> XIM[xim-chat-v1<br/>Qwen3-8B · 36 层 · LoRA rank 16]
+    XIM --> POLICY[自研六动作轮次行为头<br/>continue / backchannel / hold<br/>yield / correct / repair]
+    XIM --> VPROJ[自研语音条件投影]
+    VPROJ --> TTS[CosyVoice 2<br/>FSQ + 文本—语音 LM + causal flow matching]
+    TTS --> PLAY[可取消音频块队列 + 固定附和库]
+    POLICY --> PLAY
     PLAY --> ACK[播放采样确认]
     ACK --> STATE
     ACK --> AEC
-    STATE --> TASK[有界后台任务]
-    TASK -->|版本与相关性检查| STATE
+    XIM --> TASK[有界 ToolPlan 提案]
+    TASK -->|权限、版本与相关性检查| STATE
 ```
 
-Mimi 仅提供用户音频编码，不等于中文语义理解；CosyVoice 2 仅为合成候选。SpeechTokenizer 只作语义／声学解耦对照，不进入当前目标主链路。Mimi 本机独立编码微基准已完成，但 LiveBridge 集成、CosyVoice 2、AEC 和实体玩偶均未测；第三方上游指标不得写成 Xim 效果。
+融合是表示对齐和适配参数联合训练，不是模型权重直接相加。Mimi 仅提供用户音频编码，不等于中文语义理解；xim-chat-v1 是确定的共享语言核心，不是任意替换的 LLM 占位；CosyVoice 2 仅为待接入合成器。SpeechTokenizer 只作语义／声学解耦对照，不进入当前目标主链路。具体结构和训练步骤见[融合模型设计](FUSION_ARCHITECTURE.md)。
+
+Mimi 本机独立编码微基准已完成，但融合检查点、LiveBridge 集成、CosyVoice 2、AEC 和实体玩偶均未训练或未测；第三方上游指标不得写成 Xim 效果。
 
 关键不变量：
 
