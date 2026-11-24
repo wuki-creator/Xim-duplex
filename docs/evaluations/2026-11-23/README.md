@@ -2,11 +2,13 @@
 
 ## 范围与环境
 
-- 目标机：`biomap-a100-roce-0018`，8×A100 80 GB；本次仅调用已有回环服务，串行执行，未启动训练或停止服务。
+- 服务器基线机：`biomap-a100-roce-0018`，8×A100 80 GB；仅调用已有回环服务，串行执行，未启动训练或停止服务。
+- Mimi 是另做的**本机独立组件微基准**：`DESKTOP-9KGMP3J`、Windows 11 CPU、`rustymimi 0.4.1`；不是服务器结果，也未接入 LiveBridge。
 - 每项先预热一次且不计入统计；百分位采用 nearest-rank。`n=3` 或 `n=5` 的 P95 只是本批小样本的最大值附近统计，不代表生产容量。
 - ASR／Turn 使用同一段 AISHELL-3 研究参考音频：3.5359 秒，转为单声道 PCM16／16 kHz 后 SHA-256 为 `d9bb097c96734ec2a7cd5022a789efbe91e67ec958770364e8a7b75d1b5be97d`。
 - LLM 使用 5 个固定中文陪伴提示，greedy decoding，最多 96 个新 token。接口一次返回完整文本，因此这里测的是**完整回复延迟**，不是首 token。
 - TTS 使用 3 条固定短句，CPU 推理，一次返回完整 WAV。音频为 48 kHz、双声道、IEEE float32。RTF＝请求耗时／生成音频时长。
+- Mimi 使用确定性合成正弦混合音频，24 kHz 单声道、8 个 codebook；每次运行 48 个 80 ms `encode_step`，合计 3.84 秒。模型加载与权重哈希不计入延迟。
 
 ## 结果
 
@@ -15,11 +17,12 @@
 | ASR | Whisper-small | 5 | 894.005 ms | 922.829 ms | 客户端完整转写请求 |
 | Turn | Smart Turn v3.2 CPU | 10 | 32.630 ms | 36.520 ms | 服务端处理；客户端 P50 33.845 ms |
 | LLM | xim-chat-v1／Qwen3-8B＋SFT LoRA | 5 | 483.235 ms | 720.176 ms | 客户端完整非流式回复 |
-| TTS | MOSS-TTS-Nano-100M | 3 | 2,367.950 ms | 5,720.382 ms | 客户端完整 WAV；平均 RTF 0.8195 |
+| TTS（历史基线） | MOSS-TTS-Nano-100M | 3 | 2,367.950 ms | 5,720.382 ms | 客户端完整 WAV；平均 RTF 0.8195 |
+| 音频编码（目标组件，未集成） | Mimi／rustymimi 0.4.1 | 10 | 3,793.193 ms | 4,765.936 ms | 本机 CPU 完整编码 3.84 秒合成音频；均值 3,763.326 ms |
 
-LLM 健康接口报告：SFT 136 步，适配器 SHA-256 `b6e2ef18dfc5b0ba22613b72c7fce925f823b05cc71c3be630624bbf4b4b7543`，并明确标记 `adapter_pilot_only=true`。Turn 权重 SHA-256 为 `2bb026316b14a660486a75b1733cd3fbab8c2fd0314dc9af7be49f8cca967e4f`。
+LLM 健康接口报告：SFT 136 步，适配器 SHA-256 `b6e2ef18dfc5b0ba22613b72c7fce925f823b05cc71c3be630624bbf4b4b7543`，并明确标记 `adapter_pilot_only=true`。Turn 权重 SHA-256 为 `2bb026316b14a660486a75b1733cd3fbab8c2fd0314dc9af7be49f8cca967e4f`。Mimi 权重 SHA-256 为 `09b782f0629851a271227fb9d36db65c041790365f11bbe5d3d59369cf863f50`。
 
-逐次结果见 `core.json`、`llm.json`、`tts.json`。测试脚本只记录时延、载荷大小和模型标识，不保存提示、转写、回答或音频内容。
+逐次结果见 `core.json`、`llm.json`、`tts.json`、`mimi.json`。测试脚本只记录时延、载荷大小和模型标识，不保存提示、转写、回答或私人音频内容。`mimi_benchmark.py` 可复现本机 Mimi 微基准。
 
 ## 结论边界
 

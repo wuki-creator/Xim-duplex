@@ -1,6 +1,6 @@
 # 从可插话原型到语义全双工
 
-更新：2026-11-16。本文区分已经实现、研究设计与待验证指标。用户已确认基础语音识别可用，但完整重叠对话验收尚未完成；没有训练新的语音基础模型。
+更新：2026-11-23。本文区分已经实现、研究设计与待验证指标。用户已确认基础语音识别可用，但完整重叠对话验收尚未完成；没有训练新的语音基础模型。LiveBridge 为独立创业目标，当前 Demo 仍是级联基线。
 
 ## 问题定位
 
@@ -31,13 +31,15 @@
 
 ## 推荐的两条实现路线
 
-### 近期：可替换的流式级联
+### 近期：Xim LiveBridge 可替换流式级联
 
-持续麦克风输入 → 回声处理/目标说话人 → 中文流式 ASR → 语义轮次管理 → 流式 LLM → 流式 TTS → 带播放确认的音频队列。输入始终运行，不能等输出结束才监听。
+持续麦克风与播放参考 → AEC／降噪／VAD → Mimi 流式用户音频编码（仅编码）→ 自研流式语义—轮次适配器 → LiveBridge 六动作决策 → 可替换流式 LLM → CosyVoice 2 分块流式合成＋固定附和音频库 → 可取消播放队列与实际播放采样反馈。输入始终运行，不能等输出结束才监听。
 
-[FunASR](https://github.com/modelscope/FunASR) 提供中文流式识别路径，可评估其在线 Paraformer 等模型；[CosyVoice](https://github.com/FunAudioLLM/CosyVoice) 提供流式文本输入和音频输出能力，可作为 TTS 候选。二者仅为待部署/实测的候选，不能直接套用上游延迟作为本平台成绩。v0.9.1 使用自托管文本服务，不调用 DeepSeek；可观察对话树不等于模型内部 CoT。
+语音任务也进入同一状态模型：流式 LLM 只提出结构化 `ToolPlan`，服务端再按 meeting／scene／talk 校验权限和参数；会议沿用版本化确认，场景沿用对象、坐标和固定求解器白名单。任务状态以 proposed／approved／running／done／failed 事件回流会话树，纠正可撤销未执行提案，但不能虚构已完成计算已被撤销。当前仓库已打通整句语音到会议和虚拟工作台的工程路由；流式 ToolPlan 闭环仍是目标设计，完整分工见[全链路模型细节](VOICE_TASK_PIPELINE.md)。
 
-需要让 ASR 发出 interim/revision/final，而不是只返回一句最终文本。临时转写只用于预判，不直接提交用户轮次。语义控制器联合最近转写、韵律、VAD、回声信息和助手播放进度，输出 continue / backchannel / yield / correct / resume / topic_shift。模型不确定时先让出话语权，再澄清。
+[Mimi／Moshi](https://github.com/kyutai-labs/moshi) 提供全流式音频编码依据；本方案只采用编码器，不把离散音频表示等同于中文语义理解。[CosyVoice 2](https://github.com/FunAudioLLM/CosyVoice) 是 FSQ、文本—语音 LM 与 chunk-aware causal flow matching 的合成候选。SpeechTokenizer 仅作 RVQ 语义／声学解耦对照。上游能力不能直接套用作 Xim 成绩。
+
+适配器输出 interim／final 文本、韵律与轮次事件；临时结果只用于预判，不直接提交开放回答。LiveBridge 联合会话树、输出代次和播放采样时钟，输出 continue / backchannel / hold / yield / correct / repair。证据不足时先 hold，超时必须恢复或让话；纠正与取消不得删除最新用户意图。Mimi 本机独立编码微基准已完成，但目标链路、CosyVoice 2、AEC 和实体玩偶仍未集成或未测。
 
 ### 研究：原生双流语音模型
 
@@ -74,7 +76,7 @@ flowchart LR
 | 能力 | 测量方法与目标 |
 |---|---|
 | 中文识别 | 安静/噪声/外放分组计算字错误率 CER；先以安静 CER ≤10% 为试验目标，不能仅看几条合成音频 |
-| 停播 | 用户有效插话声学起点到输出设备停止发声，P95 ≤300 ms；包含 VAD、传输和音频队列 |
+| 停播 | 用户有效插话声学起点到输出设备停止发声，P95 ≤500 ms；包含 VAD、传输和音频队列；与当前 TRL 目标门槛一致，仍为 NOT_TESTED |
 | 接话 | 用户有效话轮结束到首个可听音频，P95 ≤1500 ms；包含 ASR、推理、TTS，不只测模型首 token |
 | 续接 | 纠正/换题/补充/复述的人工标注任务成功率 ≥90%，报告样本数与区间 |
 | 附和/噪声 | 分别报告误停止率、漏停止率和误回应率，不能靠降低灵敏度掩盖漏识别 |

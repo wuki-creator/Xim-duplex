@@ -109,6 +109,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, #messages:foc
 .no-motion .pending p:before {animation:none!important}
 .segment {color:var(--tone,var(--ink))}
 .no-color .segment {color:var(--ink)!important}
+.task-link {display:inline-block;margin:8px 0 3px;padding:8px 11px;border:1px solid #9bbfa38c;border-radius:10px;color:#d5eadb;text-decoration:none;font-size:12px}
+.task-link:hover,.task-link:focus-visible {background:#9bbfa31c;border-color:#c5e4cb}
 #jumpLatest {position:absolute;bottom:8px;right:7px;z-index:1;min-height:35px;font-size:11px;background:#263e32;padding:4px 10px;box-shadow:0 4px 16px #08141166}
 .retry-turn {min-height:36px;padding:3px 10px;margin-top:6px;font-size:12px;color:#f2dbc1;border-color:#d8b79266}
 .conversation-dock {border-top:1px solid #cadfca28;margin-top:4px;padding:9px 0 0}

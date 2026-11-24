@@ -46,3 +46,36 @@ test('a broken local model never falls back to an external API', {timeout:15000}
   const response=await fetch(base+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json','X-Bandi-Token':boot.token},body:JSON.stringify({text:'你好'})});
   assert.equal(response.status,502);assert.equal((await response.json()).error,'MODEL_UNAVAILABLE');
 });
+
+test('main voice chat creates meetings and dispatches bounded scene commands', {timeout:15000},async t=>{
+  let chatCalls=0;
+  const worker=http.createServer((req,res)=>{
+    if(req.url==='/health'){res.end('{"ready":true}');return;}
+    if(req.url==='/v1/chat/completions'){
+      chatCalls++;res.setHeader('Content-Type','application/json');
+      res.end('{"choices":[{"finish_reason":"stop","message":{"content":"{\\"segments\\":[{\\"text\\":\\"我在。\\",\\"emotion\\":\\"warm\\"}]}"}}]}');return;
+    }
+    res.writeHead(404);res.end();
+  });
+  worker.listen(0,'127.0.0.1');await once(worker,'listening');
+  const probe=http.createServer();probe.listen(0,'127.0.0.1');await once(probe,'listening');const port=probe.address().port;await new Promise(r=>probe.close(r));
+  const local='http://127.0.0.1:'+worker.address().port;
+  const app=spawn(process.execPath,['server.mjs'],{cwd:new URL('..',import.meta.url),env:{...process.env,XIM_TURN_URL:'',PORT:String(port),XIM_LOCAL_CHAT_URL:local,XIM_LOCAL_CHAT_MODEL:'local-model'},stdio:['ignore','pipe','pipe']});
+  t.after(async()=>{app.kill();worker.closeAllConnections();await new Promise(r=>worker.close(r));});
+  await once(app.stdout,'data');
+  const base='http://127.0.0.1:'+port,boot=await fetch(base+'/api/bootstrap').then(r=>r.json());
+  const post=(url,body)=>fetch(base+'/api/'+url,{method:'POST',headers:{'Content-Type':'application/json','X-Bandi-Token':boot.token},body:JSON.stringify(body)});
+
+  const created=await post('chat',{text:'组织三个人开会，主题是产品演示',history:[]}).then(r=>r.json());
+  assert.equal(created.task.kind,'meeting');assert.match(created.task.href,/^\/meeting\.html\?room=/);
+  const room=await post('meeting/snapshot',{id:created.task.roomId}).then(r=>r.json());
+  assert.equal(room.participants.length,3);assert.equal(room.topic,'产品演示');
+
+  const scene=await post('chat',{text:'添加一个红色方块',history:[]}).then(r=>r.json());
+  assert.equal(scene.task.kind,'workbench');assert.equal(scene.task.input,'添加一个红色方块');
+  assert.match(scene.task.href,/^\/workbench\.html\?task=/);assert.match(scene.task.href,/command=/);
+  assert.equal(chatCalls,0,'deterministic task routes must not require an extra chat completion');
+
+  const ordinary=await post('chat',{text:'陪我聊两句',history:[]}).then(r=>r.json());
+  assert.equal(ordinary.task,null);assert.equal(chatCalls,1);
+});

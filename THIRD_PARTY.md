@@ -13,7 +13,13 @@
 | Qwen3-8B | `xim-chat-v1` 多任务后训练基座，保持上游来源，权重独立下载 | https://huggingface.co/Qwen/Qwen3-8B ，Apache-2.0；固定版本与实验状态见 `training/README.md` |
 | Smart Turn v3.2 | 自托管声学话轮结束判断，权重独立下载 | https://huggingface.co/pipecat-ai/smart-turn-v3 ，BSD-2-Clause；完整许可见 `scripts/SMART_TURN_LICENSE`，固定版本与摘要见 `docs/WORLD_MODEL_PLAN.md` |
 
-按用户新要求，本版本提供自部署 OpenMOSS Nano 语音适配器；模型参数与上游代码独立下载，不随本仓库分发。来源和权重摘要见 [架构记录](docs/XIM_MOSS_ARCHITECTURE.md)。不读取旧的 `private/moss.json`，也不使用旧的 `MOSS_*` 云接口配置；私有研究文件和数据不随本仓库分发。
+## 创业目标候选（不是当前运行依赖）
+
+- Mimi：LiveBridge 目标中的用户音频流式编码器，仅使用编码输出。论文／官方仓库：https://arxiv.org/abs/2410.00037 与 https://github.com/kyutai-labs/moshi 。本机微基准使用官方权重，SHA-256 为 `09b782f0629851a271227fb9d36db65c041790365f11bbe5d3d59369cf863f50`；代码、权重及配套模型许可在产品发行前逐项复核。
+- CosyVoice 2：分块流式合成候选，尚未在 Xim 部署或实测。论文／官方仓库：https://arxiv.org/abs/2412.10117 与 https://github.com/FunAudioLLM/CosyVoice 。增量文本、角色音色、模型权重和数据授权均须独立审查。
+- SpeechTokenizer：语义／声学解耦对照，不进入当前目标主链路，也不作为原生流式证据。ICLR 2024 来源：https://proceedings.iclr.cc/paper_files/paper/2024/hash/86d1ab582afb247ccaa84bec4a7e24f7-Abstract-Conference.html 。
+
+按用户新要求，本版本提供自部署 OpenMOSS Nano 语音适配器；模型参数与上游代码独立下载，不随本仓库分发。来源和权重摘要见 [架构记录](docs/XIM_MOSS_ARCHITECTURE.md)。不读取旧的 `private/moss.json`，也不使用旧的 `MOSS_*` 云接口配置；私有研究文件和数据不随本仓库分发。MOSS Nano 仅是当前 Demo／历史基线，不属于 LiveBridge 目标主链路。
 
 公开语音开发数据 AISHELL-3 来源为 https://www.openslr.org/93 ，页面标注 Apache 2.0；只准备了 30 条格式验证样本，没有训练声音模型。具体角色声音的使用授权需要独立记录。
 

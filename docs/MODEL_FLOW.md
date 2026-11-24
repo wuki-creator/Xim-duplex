@@ -1,20 +1,22 @@
 # Xim Duplex 当前模型与对话流程
 
-更新时间：2026-11-23 · 代码版本：v0.10.0
+更新时间：2026-11-24 · 代码版本：v0.10.0
 
-现行产品不调用 MOSS 云 API。当前主对话链路是 Xim 持续收音 → 自部署 Whisper＋Smart Turn → 两阶段插话控制与有限交互状态 → 自托管语言模型 → 本地 MOSS Nano 语音，服务不可用时回退设备朗读。讲话开始先 hold，附和或未识别可 resume，纠正／让出／新输入才 cancel。实际启用状态与组件实测见[验证记录](VALIDATION.md)。
+现行产品不调用 MOSS 云 API。当前主对话链路是 Xim 持续收音 → 自部署 Whisper＋Smart Turn → 两阶段插话控制与有限交互状态 → 明确任务路由或自托管语言模型 → 本地 MOSS Nano 语音，服务不可用时回退设备朗读。讲话开始先 hold，附和或未识别可 resume，纠正／让出／新输入才 cancel。实际启用状态与组件实测见[验证记录](VALIDATION.md)。
 
-工作台与会议空间使用自托管语言模型处理结构化任务，由 Xim 检查方案、确认和执行状态。详细操作与验证边界见 [使用指南](WORKBENCH_AND_MEETING.md)。
+主对话现在可以接收明确语音口令创建虚拟会议，或把场景动作交给物理工作台；普通聊天、能力提问和否定句不触发任务。工作台与会议空间使用自托管语言模型处理结构化任务，由 Xim 检查方案、确认、对象、坐标和执行状态。完整模型参数、时序与安全边界见 **[语音任务全链路模型细节](VOICE_TASK_PIPELINE.md)**，操作方式见 [使用指南](WORKBENCH_AND_MEETING.md)。
 
 主对话可配置独立文本和声音服务，图像生成改为自部署服务接口；见[部署说明](SELF_HOSTED_ROADMAP.md)。本机已连接服务器的 Nano 语音，图像模型尚未部署。自主研发与训练边界见[技术路线](MODEL_STRATEGY.md)。
 
 ```mermaid
 flowchart LR
-    TALK[语音或文字] --> ROUTE[本地模型识别意图]
-    ROUTE --> LAB[物理工作台：建物体、下载、虚拟机械臂]
-    LAB --> COMPUTE[固定计算：服务器或本机]
+    TALK[语音或文字] --> ROUTE{服务端明确任务路由}
+    ROUTE -->|普通聊天| CHAT[本地陪伴对话模型]
+    ROUTE -->|明确场景动作| LAB[物理工作台：建物体、下载、虚拟机械臂]
+    LAB --> CHECK[动作白名单、当前对象与坐标校验]
+    CHECK --> COMPUTE[固定计算：服务器或本机]
     LAB --> IMAGE[用户确认后请求自部署图像服务<br/>未配置时提示不可用]
-    ROUTE --> ROOM[会议空间：具名角色与任务]
+    ROUTE -->|创建或组织会议| ROOM[会议空间：具名角色与任务]
     ROOM --> PLAN[讨论及方案版本]
     PLAN --> CONFIRM{用户明确确认}
     CONFIRM --> RESULT[完成文字交付物或获准计算]
@@ -114,34 +116,38 @@ flowchart LR
 
 目前没有达到策略晋级所需的真人数据。独立的 xim-chat-v1 文字多任务后训练已完成首轮试验，见第 5 节；语音模型自进化仍未完成。服务端现已把本地 active 策略文字实际传入聊天请求，策略记录不等于权重更新。
 
-## 4. 拟升级架构：尚未部署
+## 4. 创业目标架构：Xim LiveBridge（尚未集成）
 
-当前不使用 MOSS-Live 云接口。新增话轮模型和世界模型研究方案见 [世界模型路线](WORLD_MODEL_PLAN.md)。
+目标架构不再使用 MOSS 作为新链路的组件。当前 GitHub Demo 的 MOSS Nano 仅保留为历史基线；目标与当前实现不得混写。
 
 ```mermaid
 flowchart TD
-    AUDIO[持续音频输入] --> AEC[回声处理与目标说话人]
-    AEC --> STREAM[中文流式 ASR<br/>临时转写、修订、最终转写]
-    STREAM --> TM[语义轮次管理<br/>附和、让出、纠正、恢复、换题]
-    TM --> STATE[服务端会话树<br/>播放时间轴与输出代次]
-    STATE --> GEN[流式对话生成]
-    GEN --> STTS[流式 TTS]
-    STTS --> PLAY[可取消音频块队列]
+    AUDIO[持续用户音频] --> AEC[AEC／降噪／VAD]
+    REF[设备播放参考] --> AEC
+    AEC --> MIMI[Mimi 流式用户音频编码<br/>仅编码 · 24 kHz · 12.5 Hz]
+    MIMI --> ADAPT[自研流式语义—轮次适配器<br/>interim／final · 韵律 · 轮次事件]
+    ADAPT --> POLICY[LiveBridge 六动作决策<br/>continue · backchannel · hold<br/>yield · correct · repair]
+    POLICY --> STATE[会话树 + 输出代次 + 播放采样时钟]
+    STATE --> GEN[可替换流式 LLM 回复规划器]
+    GEN --> CV2[CosyVoice 2 分块流式合成<br/>＋固定附和音频库]
+    CV2 --> PLAY[可取消音频块队列]
     PLAY --> ACK[按实际播放采样数确认]
     ACK --> STATE
+    ACK --> AEC
     ACK --> FACE[表情与情绪色同步]
-    TM -->|必要时暂停 / 取消| PLAY
-    RESEARCH[研究分支：Moshi 类原生双音频流模型] -.替换级联核心.-> GEN
+    POLICY -->|暂停 / 取消 / 恢复| PLAY
+    RESEARCH[独立研究分支：原生双音频流模型] -.不冒充当前实现.-> GEN
 ```
 
-候选与依据：
+候选、证据与边界：
 
-- [FunASR](https://github.com/modelscope/FunASR)：中文流式识别候选，待部署与真实音频验证。
-- [CosyVoice](https://github.com/FunAudioLLM/CosyVoice)：流式文本输入/语音输出候选，待验证设备端延迟。
-- [Moshi](https://github.com/kyutai-labs/moshi)：用户/助手双音频流架构参考，中文效果与算力需独立评估。
+- [Mimi／Moshi](https://github.com/kyutai-labs/moshi)：目标链路只采用 Mimi 用户音频编码器；上游说明为全流式、80 ms 帧级表示。2026-11-23 本机 Windows CPU 独立微基准为 n=10、3.84 秒合成音频编码 P50 3793.193 ms／P95 4765.936 ms；不证明实时、中文语义、重建音质或 LiveBridge 集成。
+- [CosyVoice 2](https://github.com/FunAudioLLM/CosyVoice)：FSQ、文本—语音 LM 与 chunk-aware causal flow matching 的合成候选；增量文本、可听首音、自然度、取消与并发均未在 Xim 实测。
+- [SpeechTokenizer（ICLR 2024）](https://proceedings.iclr.cc/paper_files/paper/2024/hash/86d1ab582afb247ccaa84bec4a7e24f7-Abstract-Conference.html)：仅作 RVQ 语义／声学解耦对照，不作为原生流式能力证据。
+- [Moshi](https://github.com/kyutai-labs/moshi)：仅作独立原生双音频流研究参考，中文效果、许可与算力需独立评估。
 - [MOVA 论文](https://arxiv.org/html/2602.08794v2)：同步音视频生成架构，可借鉴时间对齐与跨模态桥接，不是现成的语音对话模型。本项目未加载其权重。
 
-详细改造、训练与验收设计见 [全双工架构说明](DUPLEX_ARCHITECTURE.md)；实测与限制见 [验证记录](VALIDATION.md)。
+详细改造、训练与验收设计见 [全双工架构说明](DUPLEX_ARCHITECTURE.md)；逐次结果与限制见 [验证记录](VALIDATION.md) 和 [组件实测](evaluations/2026-11-23/README.md)。
 
 ## 5. xim-chat-v1 离线多任务后训练
 

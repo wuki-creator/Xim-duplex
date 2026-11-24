@@ -11,6 +11,7 @@ import {interpretWorkbench,computeWorld,generateWorkbenchImage} from './workbenc
 import {MeetingService,MeetingError} from './meeting.mjs';
 import {localChat,localSpeech,loopbackUrl} from './local-models.mjs';
 import {predictTurn,TurnReleaseGate} from './turn-completion.mjs';
+import {routeVoiceTask} from './voice-task-router.mjs';
 const root=path.dirname(fileURLToPath(import.meta.url));
 const cliPortIndex=process.argv.findIndex(value=>value==='--port');
 const cliPort=cliPortIndex>=0?process.argv[cliPortIndex+1]:null;
@@ -61,6 +62,7 @@ const server=http.createServer(async(req,res)=>{
       const signal=AbortSignal.any([controller.signal,AbortSignal.timeout(120000)]);
       try{
         if(url.pathname==='/api/meeting/create')return send(res,200,meeting.create());
+        if(url.pathname==='/api/meeting/snapshot')return send(res,200,meeting.snapshot(meeting.get(b.id)));
         if(url.pathname==='/api/meeting/input')return send(res,200,await meeting.input(b.id,b.text,b.selected,signal));
         if(url.pathname==='/api/meeting/approve')return send(res,200,await meeting.approve(b.id,b.task,b.rev,signal));
         return send(res,404,{error:'NOT_FOUND'});
@@ -99,11 +101,23 @@ const server=http.createServer(async(req,res)=>{
       const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),45000);
       res.on('close',()=>{if(!res.writableEnded)controller.abort();});
       try{
-        const history=Array.isArray(b.history)?b.history.slice(-10).filter(m=>m&&['user','assistant'].includes(m.role)&&typeof m.content==='string'&&m.content.length<=2000):[];
-        const result=await localChat({url:localChatUrl,model:localChatModel,text:b.text,history,interruption:b.interruption,styleInstruction:styles.instruction,signal:controller.signal});
+        const route=routeVoiceTask(b.text);
+        let result;
+        if(route?.kind==='meeting'){
+          const room=await meeting.input(meeting.create().id,route.input,null,controller.signal);
+          const topic=room.topic==='未命名会议'?'':`，主题是${room.topic}`;
+          const text=room.participants.length?`已创建 ${room.participants.length} 人虚拟会议${topic}。`:'已创建会议空间，进入后可指定 1 到 8 位虚拟参会者。';
+          result={segments:[{text,emotion:'celebrate'}],task:{kind:'meeting',roomId:room.id,href:'/meeting.html?room='+room.id}};
+        }else if(route?.kind==='workbench'){
+          const taskId=crypto.randomUUID();
+          result={segments:[{text:'场景指令已准备好，正在交给物理工作台处理。',emotion:'warm'}],task:{kind:'workbench',id:taskId,input:route.input,href:'/workbench.html?task='+taskId+'&command='+encodeURIComponent(route.input)}};
+        }else{
+          const history=Array.isArray(b.history)?b.history.slice(-10).filter(m=>m&&['user','assistant'].includes(m.role)&&typeof m.content==='string'&&m.content.length<=2000):[];
+          result=await localChat({url:localChatUrl,model:localChatModel,text:b.text,history,interruption:b.interruption,styleInstruction:styles.instruction,signal:controller.signal});
+        }
         const id=crypto.randomUUID();replies.set(id,{prompt:b.text,segments:result.segments,at:Date.now(),policy:styles.id});
         while(replies.size>100)replies.delete(replies.keys().next().value);
-        return send(res,200,{id,segments:result.segments,model:localChatModel});
+        return send(res,200,{id,segments:result.segments,task:result.task||null,model:localChatModel});
       }catch{return send(res,502,{error:'MODEL_UNAVAILABLE'});}
       finally{clearTimeout(timeout);inflight--;}
     }

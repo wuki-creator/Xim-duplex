@@ -5,6 +5,7 @@ import {InteractionLog} from './interaction-log.js';
 const dialogue=new DialogueState();
 const duplex=new DuplexController();
 const trace=new InteractionLog();
+const taskChannel='BroadcastChannel' in window?new BroadcastChannel('xim-tasks'):null;
 const $ = id => document.getElementById(id);
 const messages = $('messages'), input = $('input'), pet = $('pet');
 const starters = [...document.querySelectorAll('[data-prompt]')];
@@ -179,6 +180,11 @@ function stop(mark=false) {
   cancelPlayback();duplex.output('idle');
   busy(false);
 }
+function dispatchTask(task){
+  if(task?.kind==='workbench'&&typeof task.id==='string'&&typeof task.input==='string'){
+    taskChannel?.postMessage({type:'workbench-command',id:task.id,input:task.input});
+  }
+}
 function renderReply(reply) {
   const e=Object.hasOwn(labels,reply.segments[0]?.emotion)?reply.segments[0].emotion:'warm';
   const a=card('assistant','伴点 · '+labels[e][0]);
@@ -186,6 +192,11 @@ function renderReply(reply) {
     const p=document.createElement('p'); p.className='segment';
     p.style.setProperty('--tone',(labels[seg.emotion]||labels.warm)[1]);
     p.textContent=seg.text; a.append(p);
+  }
+  if(['meeting','workbench'].includes(reply.task?.kind)&&typeof reply.task.href==='string'&&reply.task.href.startsWith('/')){
+    const link=document.createElement('a');link.className='task-link';link.href=reply.task.href;
+    link.textContent=reply.task.kind==='meeting'?'打开会议空间，继续派活与确认 →':'打开物理工作台，查看场景指令 →';
+    a.append(link);
   }
   const feedback=document.createElement('div');
   feedback.className='feedback-buttons';
@@ -223,6 +234,7 @@ async function run(turn) {
   try {
     const reply=await post('chat',{...dialogue.request(turn.node),style:'warm'},controller.signal);
     if(active!==turn || controller.signal.aborted) return;
+    dispatchTask(reply.task);
     const follow=nearBottom();
     const answer=renderReply(reply);
     pending.replaceWith(answer);

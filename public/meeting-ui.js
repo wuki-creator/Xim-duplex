@@ -79,4 +79,9 @@ window.addEventListener('xim:voice-ready',()=>{voice=true;});
 window.addEventListener('xim:voice-closed',()=>{voice=false;});
 window.addEventListener('xim:speech-start',()=>window.speechSynthesis?.cancel());
 status('正在连接会议空间…');
-fetch('/api/bootstrap').then(r=>{if(!r.ok)throw Error();return r.json();}).then(async x=>{boot=x;room=await request('create',{});status('');render();}).catch(()=>status('连不上本机会议服务，请重新加载。'));
+fetch('/api/bootstrap').then(r=>{if(!r.ok)throw Error();return r.json();}).then(async x=>{
+  boot=x;
+  const id=new URLSearchParams(location.search).get('room');
+  room=id?await request('snapshot',{id}):await request('create',{});
+  history.replaceState(null,'','/meeting.html');status('');render();
+}).catch(()=>status('连不上本机会议服务，或这场会议已过期。请重新打开。'));

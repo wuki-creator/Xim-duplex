@@ -3,10 +3,15 @@ const $=id=>document.getElementById(id),coords=['px','py','pz'].map($),history=[
 const labels={box:'方块',sphere:'球体',cylinder:'圆柱'};
 const errors={PATH_BLOCKED:'机械臂末端的直线路径经过其他物体，请移动障碍物或换一个目标。',UNREACHABLE:'目标超出虚拟机械臂的活动范围，或直线经过底座附近。请把目标移近一些。',MODEL_UNAVAILABLE:'暂时连不上本地对话模型，请再试一次。',MODEL_NOT_CONFIGURED:'请先启动本地对话模型。',COMPUTE_UNAVAILABLE:'暂时无法完成计算。',IMAGE_NOT_CONFIGURED:'图片服务尚未配置。',IMAGE_BALANCE:'图片服务资源不足。',IMAGE_FORBIDDEN:'当前账号没有生图权限，或请求未通过平台审核。',IMAGE_UNAVAILABLE:'暂时无法生成图片，请稍后重试。',BUSY:'上一项操作还在继续，请稍等。'};
 let world,boot,report,imagePrompt,planning,armPending=false,generating=false,voice=false;
+const handledTasks=new Set();
 
 try{world=new World($('viewport'),refresh);}catch(error){$('worldError').hidden=false;console.error(error.name);}
 refresh();
-fetch('/api/bootstrap').then(r=>{if(!r.ok)throw Error();return r.json();}).then(x=>{boot=x;}).catch(()=>log('暂时连不上本机服务。','error'));
+fetch('/api/bootstrap').then(r=>{if(!r.ok)throw Error();return r.json();}).then(x=>{
+  boot=x;
+  const params=new URLSearchParams(location.search),command=params.get('command'),task=params.get('task')||'';
+  if(command){history.replaceState(null,'','/workbench.html');acceptTask(task,command);}
+}).catch(()=>log('暂时连不上本机服务。','error'));
 
 function log(text,role='assistant',withVoice=false){
   const p=document.createElement('p');p.dataset.role=role;p.textContent=text;$('activity').append(p);
@@ -136,6 +141,18 @@ async function submit(line){
   try{const intent=await post('intent',{input,context},abort.signal);if(!abort.signal.aborted)await execute(intent);}
   catch(e){failure(e);}finally{if(planning===abort){planning=null;$('commandSend').textContent='发送 ↑';}}
 }
+function acceptTask(id,line){
+  const key=typeof id==='string'?id.slice(0,80):'';
+  if(key&&handledTasks.has(key))return;
+  if(typeof line!=='string'||!line.trim())return;
+  if(key){handledTasks.add(key);if(handledTasks.size>32)handledTasks.delete(handledTasks.values().next().value);}
+  void submit(line);
+}
+const taskChannel='BroadcastChannel' in window?new BroadcastChannel('xim-tasks'):null;
+if(taskChannel)taskChannel.onmessage=event=>{
+  const data=event.data;
+  if(data?.type==='workbench-command')acceptTask(data.id,data.input);
+};
 $('command').onsubmit=e=>{e.preventDefault();const input=$('commandText');const text=input.value;input.value='';void submit(text);};
 window.addEventListener('xim:transcript',e=>{if(e.detail)void submit(e.detail);});
 window.addEventListener('xim:voice-ready',()=>{voice=true;});
