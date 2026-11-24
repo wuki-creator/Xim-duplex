@@ -18,7 +18,7 @@ v0.10.0 新增两阶段插话控制：检测到讲话先暂缓播放，附和或
 
 ## 创业目标：跨模态融合模型
 
-Xim LiveBridge 采用 **Mimi 用户音频编码器＋自研跨模态适配层＋xim-chat-v1＋CosyVoice 2**。融合是共享语义表示与联合训练，不是把权重直接相加。Mimi 只编码用户音频；自研音频投影与因果时序适配器将语音、文字和会话状态对齐；`xim-chat-v1` 统一生成回复、轮次行为与工具提案；语音条件投影再驱动 CosyVoice 2 合成声音。**融合权重、CosyVoice 2 部署及完整双工链路目前均为 NOT_TRAINED／NOT_INTEGRATED／NOT_TESTED。** 训练步骤与接口见[融合模型设计](docs/FUSION_ARCHITECTURE.md)。
+Xim LiveBridge 采用 **Mimi 用户音频编码器＋自研跨模态适配层＋xim-chat-v1＋XimVoiceCond-v1＋CosyVoice 2**。融合是共享语义表示与联合训练，不是把权重直接相加。Mimi 只编码用户音频；自研音频投影与因果时序适配器将语音、文字和会话状态对齐；`xim-chat-v1` 统一生成回复、轮次行为与工具提案；**XimVoiceCond-v1** 再把回复转换为语音条件并驱动 CosyVoice 2 合成声音。**融合权重、XimVoiceCond-v1、CosyVoice 2 部署及完整双工链路目前均为 NOT_TRAINED／NOT_INTEGRATED／NOT_TESTED。** 训练步骤与接口见[融合模型设计](docs/FUSION_ARCHITECTURE.md)。
 
 ```mermaid
 flowchart TD
@@ -31,7 +31,7 @@ flowchart TD
     TEMP --> ALIGN
     ALIGN --> XIM[xim-chat-v1 共享语义工作区<br/>Qwen3-8B Decoder-only Transformer<br/>36 层 · LoRA rank 16]
     XIM -->|六动作| TURN[continue · backchannel · hold<br/>yield · correct · repair]
-    XIM -->|文字与情绪段落| VPROJ[自研语音条件投影]
+    XIM -->|文字与情绪段落| VPROJ[XimVoiceCond-v1]
     VPROJ --> CV2[CosyVoice 2<br/>FSQ + 文本—语音 LM<br/>chunk-aware causal flow matching]
     CV2 --> PLAY[可取消音频块队列]
     TURN --> PLAY
@@ -57,7 +57,7 @@ flowchart TD
 | 自研因果时序适配器 | 因果 Transformer＋有界 KV 缓存，只读取过去和当前帧 | 音频嵌入＋转写 revision → 增量语义／韵律特征 | NOT_TRAINED |
 | xim-chat-v1 共享语义工作区 | Qwen3-8B 解码器式 Transformer，36 层；冻结基座＋LoRA rank 16；由 SFT 136 步初始化 | 音频／文字／会话／任务状态 → 文字、情绪、轮次语义与 ToolPlan | 文字 SFT 已完成；跨模态融合未训练 |
 | 自研轮次行为头 | 共享语义上的六动作分类与校准 | 当前语义＋播放状态 → continue／backchannel／hold／yield／correct／repair | NOT_TRAINED |
-| 自研语音条件投影 | 文本、情绪与授权音色条件映射；按 CosyVoice 2 真实张量契约实现 | 回复与表达条件 → 合成条件 | NOT_TRAINED |
+| **XimVoiceCond-v1（语音条件对齐模型）** | 语义／文本输入投影＋情绪与授权音色嵌入＋FiLM＋4 层块因果 Transformer（512 维、8 头、RoPE、Pre-LN）＋2 层输出 MLP | 回复语义、文本、情绪、授权音色 → CosyVoice 2 逐块条件序列 | 目标配置；NOT_TRAINED |
 | CosyVoice 2 | FSQ＋文本—语音 LM＋chunk-aware causal flow matching | 合成条件 → 分块语音候选 | NOT_INTEGRATED／NOT_TESTED |
 
 这里的“融合”是**表示对齐和适配参数联合训练**，不是上游权重直接相加，也不假设 Mimi token 或 Qwen 隐藏状态可以未经投影直接输入 CosyVoice 2。会议版本确认、对象／坐标校验、工具权限和固定物理求解器继续留在模型外。
@@ -67,14 +67,14 @@ flowchart TD
 1. **P0｜基线与数据契约**：固定上游版本、许可与校验值；准备经授权的双通道中文交互数据、转写、六动作、播放边界和工具确认标签。
 2. **P1｜音频接入与轮次**：冻结 Mimi 与 Qwen 基座，训练音频投影、因果时序适配器和轮次行为头，优化文字对齐、表示对齐和六动作分类。
 3. **P2｜对话与工具联合**：保持基座冻结，联合训练上述适配器和现有 LoRA，覆盖回复、情绪、轮次和受限会议／场景 ToolPlan。
-4. **P3｜语音条件训练**：冻结 CosyVoice 2，单独训练语音条件投影；实测首音、RTF、自然度、CER、音色一致性和取消成本。
+4. **P3｜语音条件训练**：冻结 CosyVoice 2，单独训练 XimVoiceCond-v1；实测首音、RTF、自然度、CER、音色一致性和取消成本。
 5. **P4｜受控联合微调与晋级**：仅在独立基线达标后选择性微调适配层或额外 LoRA；通过冻结留出集、真实接口、真人盲评和资源门槛后才晋级。
 
 **当前工程验证（2026-11-24）：65／65 Node 回归通过**，包含语音创建会议和虚拟场景路由合同；这些测试不证明融合模型质量、真人体验或全双工性能。证据边界见[验证记录](docs/VALIDATION.md)，六项未测门槛定义见[融合模型设计](docs/FUSION_ARCHITECTURE.md)；本地 TRL 证据表不随仓库分发。
 
 ## 全链路模型：结构、职责与数据流
 
-蓝色节点是神经网络模型，灰色节点是规则、工程控制或数值求解器。**普通聊天、会议规划和复杂场景指令共用同一个 `xim-chat-v1`，不是三个独立语言模型。** 下图把现有语音理解与语言模型、目标语音合成链路放在同一数据流中；CosyVoice 2 和语音条件投影仍未接入，不能据此宣称融合模型已经运行。
+蓝色节点是神经网络模型，灰色节点是规则、工程控制或数值求解器。**普通聊天、会议规划和复杂场景指令共用同一个 `xim-chat-v1`，不是三个独立语言模型。** 下图把现有语音理解与语言模型、目标语音合成链路放在同一数据流中；CosyVoice 2 和 XimVoiceCond-v1 仍未接入，不能据此宣称融合模型已经运行。
 
 ```mermaid
 flowchart TD
@@ -102,7 +102,7 @@ flowchart TD
     ROOM --> CONFIRM[规则：用户明确确认后执行]
     CHECK --> WORLD[Three.js + Cannon ES<br/>固定物理 / 机械臂数值求解器<br/>非 LLM · 非世界模型]
 
-    UI --> VCOND[自研语音条件投影<br/>文本 / 情绪 / 授权音色条件]
+    UI --> VCOND[XimVoiceCond-v1<br/>文本 / 情绪 / 授权音色条件]
     VCOND --> TTS[CosyVoice 2 文本—语音 LM<br/>自回归生成 FSQ 语音 Token]
     TTS --> FLOW[CosyVoice 2 波形解码链路<br/>chunk-aware causal Flow Matching<br/>FSQ Token → 声码器 → 波形]
     FLOW --> PLAY[可取消音频块队列 / 设备朗读回退]
@@ -122,7 +122,7 @@ flowchart TD
 | [Whisper Small](https://huggingface.co/Systran/faster-whisper-small) | 音频编码器—文本解码器 Transformer | 把整句语音转成文字；不负责对话或任务决策 |
 | [Smart Turn v3.2](https://huggingface.co/pipecat-ai/smart-turn-v3) | Whisper Tiny 编码器＋浅层线性分类头，约 8M 参数 | 直接从波形预测话轮是否完成；不输出转写 |
 | [xim-chat-v1](docs/XIM_CHAT_V1_MODEL_CARD.md) | Qwen3-8B 解码器式 Transformer，36 层，冻结基座＋LoRA rank 16，当前使用 SFT 136 步检查点 | 生成聊天情绪段落、会议方案／讨论和结构化场景动作提案 |
-| 自研语音条件投影 | 条件对齐与投影网络，按真实张量契约映射文本、情绪和授权音色 | 把共享语义工作区的输出转换为合成条件；尚未训练 |
+| **XimVoiceCond-v1（语音条件对齐模型）** | 输入投影＋情绪／音色／状态嵌入＋FiLM＋4 层块因果 Transformer（512 维、8 头、FFN 2048、RoPE、Pre-LN）＋`512→1024→d_CV2` 输出 MLP | 把共享语义工作区的回复转换为 CosyVoice 2 逐块条件序列；不直接生成音频，尚未训练 |
 | [CosyVoice 2](https://github.com/FunAudioLLM/CosyVoice) | FSQ 语音表示＋文本—语音 LM＋chunk-aware causal Flow Matching＋声码器 | 将合成条件转为分块波形；尚未部署或完成 Xim 集成测试 |
 
 能量 VAD、任务路由、会议确认、对象／坐标校验和播放状态机都不是神经网络；Three.js 是渲染引擎，Cannon ES 是刚体物理引擎，机械臂轨迹来自固定数值求解器。当前没有训练物理世界模型，也没有用 LLM 直接计算物理轨迹。

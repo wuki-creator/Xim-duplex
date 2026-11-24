@@ -30,7 +30,7 @@ flowchart TD
     XIM --> TURN[自研轮次行为头<br/>continue · backchannel · hold<br/>yield · correct · repair]
     XIM --> SEG[增量文字与情绪段落]
     XIM --> PLAN[结构化 ToolPlan 提案<br/>meeting / scene / talk]
-    SEG --> VPROJ[自研语音条件投影<br/>文本／情绪／音色条件对齐]
+    SEG --> VPROJ[XimVoiceCond-v1<br/>文本／情绪／音色条件对齐]
     VPROJ --> CV2[CosyVoice 2<br/>FSQ 语音表示 + 文本—语音 LM<br/>chunk-aware causal flow matching]
     CV2 --> PLAY[可取消音频块队列]
     FIXED[固定附和音频库] --> PLAY
@@ -62,11 +62,38 @@ flowchart TD
 | 音频投影层 | 带 LayerNorm 的 MLP，将 Mimi 表示映射到 xim-chat-v1 可接收的表示空间。具体维度必须从实际权重配置读取，本文不虚构张量尺寸。 | 与文字表示维度兼容的音频嵌入；输入带时间戳、音频帧 ID 和输入代次。 |
 | 因果时序适配器 | 因果 Transformer，只读取过去与当前帧；维护有界 KV 缓存，接收音频嵌入及可用转写 revision。层数、窗口和训练超参数由消融实验确定。 | 增量语义特征、韵律特征和轮次判断所需上下文；不能使用未来音频。 |
 | xim-chat-v1 | Qwen3-8B 解码器式自回归 Transformer，36 层，基座 8,190,735,360 参数；冻结基座＋LoRA rank 16，可训练参数 7,667,712。由现有 SFT 136 步检查点初始化。 | 文字与情绪段落、轮次行为头的共享语义、结构化 ToolPlan。GRPO 120 步未晋级，不能作为额外效果。 |
-| 语音条件投影 | 将文本、允许的情绪标签、经授权音色 ID 和会话条件映射到 CosyVoice 2 的实际条件接口。先冻结合成器，单独训练投影。 | 合成条件，不是新的声码器。接口须在集成时按 CosyVoice 2 真实张量契约实现，不能假设可直接接收 Mimi token 或 Qwen 隐藏状态。 |
+| **XimVoiceCond-v1（语音条件对齐模型）** | 目标配置为语义／文本输入投影、情绪与授权音色嵌入、FiLM 条件调制、4 层块因果 Transformer 和 2 层输出 MLP。先冻结合成器，单独训练本模型。 | 输出 CosyVoice 2 逐块条件序列，不是声码器或独立 TTS。接口须按真实张量契约实现，不能假设可直接接收 Mimi token 或 Qwen 隐藏状态。 |
 | CosyVoice 2 | FSQ 语音表示、文本—语音 LM、chunk-aware causal flow matching，再经其声码器输出波形。只替代输出侧合成功能，不承担对话、轮次或工具权限。 | 分块语音候选；增量文本、首音、自然度、取消与并发均待 Xim 实测。 |
 | 轮次行为头 | 从共享语义工作区读取当前可用状态，输出 continue／backchannel／hold／yield／correct／repair 六动作。 | 交互动作，不是会议任务或机械臂动作；低置信度先 hold，不能无期限等待。 |
 
-### 接口必须显式记录
+### 3.1 XimVoiceCond-v1 目标架构（NOT_TRAINED）
+
+XimVoiceCond-v1 是回复语义到语音合成条件之间的**轻量级条件对齐模型**，不直接生成音频。以下均为待训练、待消融的目标配置，不是已有权重或实测结果。
+
+```mermaid
+flowchart LR
+    SEM[文本 Token／xim-chat-v1 可用语义表示] --> INPUT[输入投影<br/>Linear d_xim→512 + LayerNorm]
+    EMO[六类情绪标签] --> EMB[情绪嵌入 64 维]
+    SPK[经授权音色 ID] --> EMB2[音色嵌入 128 维]
+    STATE[轮次／分块状态] --> EMB3[状态嵌入 64 维]
+    EMB --> FILM[条件 MLP<br/>逐层生成 FiLM 缩放与偏移]
+    EMB2 --> FILM
+    EMB3 --> FILM
+    INPUT --> BLOCK[4 层块因果 Transformer<br/>d_model 512 · 8 头 · FFN 2048<br/>RoPE · Pre-LN · GELU · 256 Token 上下文]
+    FILM --> BLOCK
+    BLOCK --> OUT[残差输出 MLP<br/>512→1024→d_CV2 + LayerNorm]
+    OUT --> COND[speech.condition<br/>T_chunk × d_CV2 条件序列]
+    BLOCK --> PROSODY[辅助韵律头<br/>512→256→3<br/>时长 / 基频 / 能量]
+```
+
+1. **输入投影**：把文本 Token 和 xim-chat-v1 可提供的语义表示映射到 512 维；`d_xim` 从实际语言模型配置读取，不硬编码未经核对的维度。
+2. **条件融合**：情绪、授权音色和轮次／分块状态分别形成 64、128、64 维嵌入，经条件 MLP 为每个 Transformer 块生成 FiLM 缩放与偏移。音色嵌入只使用获授权数据，不能用于未授权说话人复刻。
+3. **块因果时序编码**：4 层 Transformer 主干采用 512 维、8 个注意力头、2048 维 FFN、RoPE、Pre-LN 和 GELU，目标上下文为 256 Token。当前文本块内部允许双向注意，跨块只能读取当前与过去块，并用有界 KV 缓存增量运行，禁止读取未来回复。标准多头注意力下主干约 12.6M 参数，不含输入／输出投影和嵌入。
+4. **条件输出**：残差 MLP 按 `512→1024→d_CV2` 投影，`d_CV2` 必须在集成时从 CosyVoice 2 的真实条件接口确认。输出为带 `chunk_id`、`generation_id` 和文本范围的 `[T_chunk, d_CV2]` 条件序列；过期代次直接丢弃。
+5. **辅助韵律监督**：独立 `512→256→3` 预测头学习时长、基频和能量，用于训练监督与消融；不假定 CosyVoice 2 原生接收这三个标量，也不把它们写成已实现的实时控制旋钮。
+6. **训练方式**：P3 冻结 CosyVoice 2，使用经授权的文本—语音对，通过 FSQ Token 交叉熵、条件对齐损失和韵律辅助损失训练 XimVoiceCond-v1；损失权重由消融确定。首音、RTF、自然度、CER、音色一致性和取消成本尚无实测值。
+
+### 3.2 接口必须显式记录
 
 - `audio.frame`：会话 ID、帧 ID、采样时钟、音频表示和输入代次。
 - `transcript.revision`：稳定前缀、临时文本、最终文本、置信度和来源；临时文本不能直接提交开放回答。
@@ -91,7 +118,7 @@ flowchart TD
 
 ### P3：语音条件训练
 
-先冻结 CosyVoice 2，训练语音条件投影，以经授权的文本、情绪、音色和成对语音监督音色与表达条件。分别测量可听首音、自然度、字错误率、说话人一致性与取消成本。固定附和不占用开放回答生成链路。
+先冻结 CosyVoice 2，训练 XimVoiceCond-v1，以经授权的文本、情绪、音色和成对语音监督音色与表达条件。分别测量可听首音、自然度、字错误率、说话人一致性与取消成本。固定附和不占用开放回答生成链路。
 
 ### P4：受控联合微调与晋级
 

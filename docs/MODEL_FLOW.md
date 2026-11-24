@@ -133,7 +133,7 @@ flowchart TD
     ALIGN --> XIM[xim-chat-v1 共享语义工作区<br/>Qwen3-8B · 36 层 · LoRA rank 16]
     XIM --> POLICY[自研轮次行为头<br/>continue · backchannel · hold<br/>yield · correct · repair]
     XIM --> SEG[增量文字与情绪段落]
-    SEG --> VPROJ[自研语音条件投影]
+    SEG --> VPROJ[XimVoiceCond-v1]
     VPROJ --> CV2[CosyVoice 2<br/>FSQ + 文本—语音 LM<br/>chunk-aware causal flow matching]
     CV2 --> PLAY[可取消音频块队列＋固定附和库]
     PLAY --> ACK[按实际播放采样数确认]
@@ -149,7 +149,7 @@ flowchart TD
 候选、证据与边界：
 
 - [Mimi／Moshi](https://github.com/kyutai-labs/moshi)：目标链路只采用 Mimi 用户音频编码器；上游说明为全流式、80 ms 帧级表示。2026-11-23 本机 Windows CPU 独立微基准为 n=10、3.84 秒合成音频编码 P50 3793.193 ms／P95 4765.936 ms；不证明实时、中文语义、重建音质或 LiveBridge 集成。
-- **自研适配层**：音频投影、因果时序适配器、轮次行为头和语音条件投影都是待训练模块；维度与接口必须按实际模型张量契约实现，不虚构融合参数或检查点。
+- **自研适配层**：音频投影、因果时序适配器、轮次行为头和 XimVoiceCond-v1 都是待训练模块；维度与接口必须按实际模型张量契约实现，不虚构融合参数或检查点。
 - [CosyVoice 2](https://github.com/FunAudioLLM/CosyVoice)：FSQ、文本—语音 LM 与 chunk-aware causal flow matching 的合成候选；增量文本、可听首音、自然度、取消与并发均未在 Xim 实测。
 - [SpeechTokenizer（ICLR 2024）](https://proceedings.iclr.cc/paper_files/paper/2024/hash/86d1ab582afb247ccaa84bec4a7e24f7-Abstract-Conference.html)：仅作 RVQ 语义／声学解耦对照，不作为原生流式能力证据。
 - [Moshi](https://github.com/kyutai-labs/moshi)：仅作独立原生双音频流研究参考，中文效果、许可与算力需独立评估。

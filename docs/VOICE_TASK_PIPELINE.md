@@ -23,7 +23,7 @@ flowchart TD
 
     ROUTER -->|普通对话| CHAT[xim-chat-v1<br/>Qwen3-8B Decoder-only Transformer<br/>36 层 · LoRA rank 16 · SFT 136 步]
     CHAT --> SEG[情绪段落 JSON<br/>最多 6 段 · 合计不超过 1600 字]
-    SEG --> VCOND[自研语音条件投影<br/>文本 / 情绪 / 授权音色条件<br/>NOT_TRAINED]
+    SEG --> VCOND[XimVoiceCond-v1<br/>文本 / 情绪 / 授权音色条件<br/>NOT_TRAINED]
     VCOND --> TTS[CosyVoice 2 文本—语音 LM<br/>自回归生成 FSQ 语音 Token<br/>NOT_INTEGRATED]
     TTS --> FLOW[CosyVoice 2 波形解码链路<br/>chunk-aware causal Flow Matching + 声码器<br/>NOT_TESTED]
     FLOW --> PLAY[可取消音频块队列<br/>设备朗读回退]
@@ -88,7 +88,9 @@ flowchart TD
 
 ### 3.2 目标语音合成
 
-LiveBridge 目标链路先由**自研语音条件投影**把回复文本、允许的情绪标签和经授权音色 ID 映射为合成条件，再交给 **CosyVoice 2**。其文本—语音语言模型自回归生成 FSQ 语音 Token，随后通过 chunk-aware causal Flow Matching 与声码器输出分块波形。语音条件投影尚未训练，CosyVoice 2 尚未部署或完成 Xim 集成测试。
+LiveBridge 目标链路先由 **XimVoiceCond-v1（语音条件对齐模型）** 把回复语义、文本、允许的情绪标签和经授权音色 ID 映射为合成条件，再交给 **CosyVoice 2**。XimVoiceCond-v1 的目标结构为输入投影、情绪／音色／状态嵌入、FiLM 条件调制、4 层块因果 Transformer（512 维、8 头、FFN 2048、RoPE、Pre-LN）和 `512→1024→d_CV2` 输出 MLP；当前块内部双向注意，跨块只读当前与过去块。它输出逐块条件序列，不直接生成音频。完整结构和接口见[融合模型设计](FUSION_ARCHITECTURE.md)。
+
+CosyVoice 2 的文本—语音语言模型自回归生成 FSQ 语音 Token，随后通过 chunk-aware causal Flow Matching 与声码器输出分块波形。XimVoiceCond-v1 尚未训练，CosyVoice 2 尚未部署或完成 Xim 集成测试。
 
 目标播放链路按音频块取消，并以实际播放采样数回写会话状态；不能用 UI 动画时间代替真实播放边界。会议页与工作台页的结果提示使用浏览器 `speechSynthesis`，与主对话的神经语音是不同输出路径，不能混写为同一个流式语音模型。
 
@@ -177,7 +179,7 @@ flowchart TD
     ALIGN --> XIM[xim-chat-v1 共享语义工作区<br/>Qwen3-8B · 36 层 · LoRA rank 16]
     XIM --> POLICY[自研轮次行为头<br/>continue · backchannel · hold<br/>yield · correct · repair]
     XIM --> CHAT[增量文字与情绪段落]
-    CHAT --> VPROJ[自研语音条件投影]
+    CHAT --> VPROJ[XimVoiceCond-v1]
     VPROJ --> CV2[CosyVoice 2<br/>FSQ + 文本—语音 LM<br/>chunk-aware causal flow matching]
     CV2 --> PLAY[可取消音频块队列<br/>固定附和音频库]
     PLAY --> SAMPLES[实际播放采样反馈]
@@ -199,12 +201,12 @@ flowchart TD
 - **Mimi**：只提供用户音频编码表示，不承担中文语义、会议规划或物理控制；不使用 Mimi 解码器，也不把 Moshi 当成 Xim 模型。
 - **自研音频投影＋因果时序适配器**：将音频表示映射到语言表示空间，只读取过去和当前帧，与文字及会话状态对齐；目前尚未训练或集成。
 - **xim-chat-v1**：以现有 Qwen3-8B＋LoRA SFT 检查点初始化，作为共享语义工作区，统一产生回复、六动作行为与 `ToolPlan`；不是可随意替换的占位符。
-- **自研语音条件投影＋CosyVoice 2**：把回复、情绪与经授权音色条件接入 FSQ、文本—语音 LM 和 chunk-aware causal flow matching 合成链路；接口需按真实张量契约实现，未部署、未测。
+- **XimVoiceCond-v1＋CosyVoice 2**：把回复、情绪与经授权音色条件接入 FSQ、文本—语音 LM 和 chunk-aware causal flow matching 合成链路；接口需按真实张量契约实现，未部署、未测。
 - **会议与场景校验器**：复用当前受限 API 的对象、坐标、版本和确认约束，再增加任务代次与取消状态。模型不能自行授予工具权限。
 
 ### 6.2 联合训练与状态边界
 
-先冻结 Mimi 和 Qwen 基座，训练音频投影、因果时序适配器与轮次行为头；再联合训练现有 LoRA 的对话／工具目标；随后冻结 CosyVoice 2 单独训练语音条件投影。只有独立基线达标后才考虑选择性联合微调。没有真实跨模态训练与导出检查点前，不宣称融合已经完成。
+先冻结 Mimi 和 Qwen 基座，训练音频投影、因果时序适配器与轮次行为头；再联合训练现有 LoRA 的对话／工具目标；随后冻结 CosyVoice 2 单独训练 XimVoiceCond-v1。只有独立基线达标后才考虑选择性联合微调。没有真实跨模态训练与导出检查点前，不宣称融合已经完成。
 
 目标状态下，用户纠正应立即影响未播放音频和未执行任务提案；已经获准的数值计算不能假装“未发生”，应以任务事件返回完成、失败或不可撤销状态。真实硬件若未来接入，必须另有急停、权限、速度／空间限制和安全认证，不能仅依赖 LLM 取消。
 
