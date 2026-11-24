@@ -1,8 +1,10 @@
-# XimVoiceCond-v1 模块契约（2026-11-24）
+# XimVoiceCond-v1 与 CosyVoice 2 接口适配（2026-11-24）
 
-- 新增独立 `training/xim_voice_cond.py`：语义输入投影、情绪／授权音色／状态嵌入、逐层 FiLM、块因果 RoPE 注意力、Pre-LN Transformer、条件输出 MLP、辅助韵律头和有界 KV 缓存均可实例化；默认注意力与 FFN 权重计数为 12,582,912。
+- 新增独立 `training/xim_voice_cond.py`：语义输入投影、情绪／授权音色／状态嵌入、逐层 FiLM、块因果 RoPE 注意力、Pre-LN Transformer、条件输出 MLP、辅助韵律头和有界 KV 缓存均可实例化；默认注意力与 FFN 权重计数为 12,582,912，默认输出维度已按官方接口改为 896。
 - `python tests/xim-voice-cond-check.py` 完成 11／11 项：输出形状、默认主干参数量、未来块隔离、当前块双向注意、完整与逐块 KV 输出一致、拆分块拒绝、填充掩码、条件嵌入生效、梯度反传、非法输入拒绝和过期代次丢弃。
-- 这些是无权重张量契约测试，不是语音训练、CosyVoice 2 集成、首音、自然度、音色、真人双工或端到端效果证据。增量 API 要求每次提交完整且严格更新的块，禁止把同一块拆到多个缓存调用。
+- 新增 `training/xim_cosyvoice2_bridge.py`，按 CosyVoice 固定提交 `074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc` 核对 `896 / 6561 / (5,15)` 接口，并在目标文本嵌入上加入零初始化门控条件残差；提示文本、任务标记、提示语音及序列长度不变。
+- `python tests/xim-cosyvoice2-bridge-check.py` 完成 9／9 项，使用复刻官方属性链与 `inference_wrapper` 签名的小型接口测试替身，覆盖零门控恒等、条件作用范围、输入形状、两个 batch-1 样本顺序 dry-run、UUID、Token 上限、非法输入、梯度和 XimVoiceCond-v1 串联。
+- 同轮 `npm test` 完成 65／65 项，Python 编译检查通过。以上是**接口兼容 dry-run，不是官方权重推理**：本机未安装上游依赖、未加载 CosyVoice2-0.5B 权重，未验证真实语音 Token 质量、波形、首音、RTF、自然度、CER、音色一致性或真人双工。增量 API 仍要求每次提交完整且严格更新的块。
 
 # 主对话语音任务路由（2026-11-24）
 

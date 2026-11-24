@@ -58,9 +58,9 @@ flowchart TD
 | xim-chat-v1 共享语义工作区 | Qwen3-8B 解码器式 Transformer，36 层；冻结基座＋LoRA rank 16；由 SFT 136 步初始化 | 音频／文字／会话／任务状态 → 文字、情绪、轮次语义与 ToolPlan | 文字 SFT 已完成；跨模态融合未训练 |
 | 自研轮次行为头 | 共享语义上的六动作分类与校准 | 当前语义＋播放状态 → continue／backchannel／hold／yield／correct／repair | NOT_TRAINED |
 | **XimVoiceCond-v1（语音条件对齐模型）** | 语义／文本输入投影＋情绪与授权音色嵌入＋FiLM＋4 层块因果 Transformer（512 维、8 头、RoPE、Pre-LN）＋2 层输出 MLP | 回复语义、文本、情绪、授权音色 → CosyVoice 2 逐块条件序列 | [PyTorch 模块](training/xim_voice_cond.py)已实现；11／11 契约测试通过；NOT_TRAINED |
-| CosyVoice 2 | FSQ＋文本—语音 LM＋chunk-aware causal flow matching | 合成条件 → 分块语音候选 | NOT_INTEGRATED／NOT_TESTED |
+| CosyVoice 2 | FSQ＋文本—语音 LM＋chunk-aware causal flow matching | 合成条件 → 分块语音候选 | [896 维条件适配层](training/xim_cosyvoice2_bridge.py)与 9／9 接口兼容 dry-run 已实现；官方权重 NOT_INTEGRATED／NOT_TESTED |
 
-这里的“融合”是**表示对齐和适配参数联合训练**，不是上游权重直接相加，也不假设 Mimi token 或 Qwen 隐藏状态可以未经投影直接输入 CosyVoice 2。会议版本确认、对象／坐标校验、工具权限和固定物理求解器继续留在模型外。
+这里的“融合”是**表示对齐和适配参数联合训练**，不是上游权重直接相加，也不假设 Mimi token 或 Qwen 隐藏状态可以未经投影直接输入 CosyVoice 2。适配层只对目标文本嵌入加入零初始化门控残差，保留提示文本、任务标记、提示语音和官方序列顺序。会议版本确认、对象／坐标校验、工具权限和固定物理求解器继续留在模型外。
 
 ### P0–P4 联合训练路线（尚未执行）
 
@@ -70,7 +70,7 @@ flowchart TD
 4. **P3｜语音条件训练**：冻结 CosyVoice 2，单独训练 XimVoiceCond-v1；实测首音、RTF、自然度、CER、音色一致性和取消成本。
 5. **P4｜受控联合微调与晋级**：仅在独立基线达标后选择性微调适配层或额外 LoRA；通过冻结留出集、真实接口、真人盲评和资源门槛后才晋级。
 
-**当前工程验证（2026-11-24）：65／65 Node 回归通过，XimVoiceCond-v1 11／11 PyTorch 契约测试通过**。前者包含语音创建会议和虚拟场景路由合同；后者覆盖张量形状、块因果、KV 一致性、FiLM、梯度、掩码与失效代次。两类测试都不证明融合模型质量、真人体验或全双工性能。证据边界见[验证记录](docs/VALIDATION.md)，六项未测门槛定义见[融合模型设计](docs/FUSION_ARCHITECTURE.md)；本地 TRL 证据表不随仓库分发。
+**当前工程验证（2026-11-24）：65／65 Node 回归、XimVoiceCond-v1 11／11 PyTorch 契约测试、CosyVoice 2 适配层 9／9 接口兼容测试通过**。Node 测试包含语音创建会议和虚拟场景路由合同；语音条件测试覆盖张量形状、块因果、KV 一致性、FiLM、梯度、掩码与失效代次；适配测试使用接口替身顺序运行两个 batch-1 样本。三类测试都不证明官方权重推理、融合模型质量、真人体验或全双工性能。证据边界见[验证记录](docs/VALIDATION.md)，六项未测门槛定义见[融合模型设计](docs/FUSION_ARCHITECTURE.md)；本地 TRL 证据表不随仓库分发。
 
 ## 全链路模型：结构、职责与数据流
 
@@ -177,6 +177,7 @@ Linux/macOS 可创建虚拟环境、安装 `requirements-asr.txt` 后运行 `pyt
 ```powershell
 npm test
 npm run test:voice-cond
+npm run test:cosyvoice2-bridge
 npm run evolve -- propose data/feedback.jsonl
 npm run evolve -- promote path/to/human-evaluation.json
 ```

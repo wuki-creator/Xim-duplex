@@ -139,7 +139,7 @@ python training/evaluate_multitask.py \
 
 ## XimVoiceCond-v1 独立模块与张量契约
 
-`xim_voice_cond.py` 是 2026-11-24 新增的可实例化 PyTorch 目标模块，产品名为 **XimVoiceCond-v1**。它把 `[B, T, d_xim]` 语义输入映射为 `[B, T, d_CV2]` 语音条件候选，并输出 `[B, T, 3]` 的时长／基频／能量辅助预测。默认主干为 4 层、512 维、8 头、FFN 2048；注意力与 FFN 权重合计 **12,582,912**，不含偏置、输入／输出投影和嵌入。
+`xim_voice_cond.py` 是 2026-11-24 新增的可实例化 PyTorch 目标模块，产品名为 **XimVoiceCond-v1**。它把 `[B, T, d_xim]` 语义输入映射为 `[B, T, d_CV2]` 语音条件候选，并输出 `[B, T, 3]` 的时长／基频／能量辅助预测。默认主干为 4 层、512 维、8 头、FFN 2048；注意力与 FFN 权重合计 **12,582,912**，不含偏置、输入／输出投影和嵌入。默认 `d_CV2=896`，对应已核对的 CosyVoice2-0.5B Qwen2LM 文本嵌入维度。
 
 - 情绪、授权音色和状态嵌入经逐层 FiLM 注入；块内双向注意，块间只能读取当前与过去块。
 - `use_cache=True` 时每次调用必须提交一个或多个完整新块；后续调用的首个 `chunk_id` 必须大于缓存最后块，禁止把同一块拆到多个增量调用。
@@ -150,10 +150,30 @@ python training/evaluate_multitask.py \
 ```python
 from training.xim_voice_cond import XimVoiceCondConfig, XimVoiceCondV1
 
-config = XimVoiceCondConfig(d_xim=4096, d_cv2=1024)
+config = XimVoiceCondConfig(d_xim=4096, d_cv2=896)
 model = XimVoiceCondV1(config)
 # semantic: float[B, T, 4096]; chunk_ids / emotion_id / speaker_id / state_id: long
-# output.condition: [B, T, 1024]; output.prosody: [B, T, 3]
+# output.condition: [B, T, 896]; output.prosody: [B, T, 3]
 ```
 
-这里只有模型结构与无权重契约测试，**尚未进行语音训练，也未接入 CosyVoice 2**。`d_CV2` 仍须按真实上游接口确认；这些测试不证明首音、RTF、自然度、CER、音色一致性、取消成本或全双工效果。
+### CosyVoice 2 条件适配层
+
+`xim_cosyvoice2_bridge.py` 按上游固定提交 `074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc` 实现接口适配。已核对的 Qwen2LM 接口为 `llm_input_size=896`、`speech_token_size=6561`、`mix_ratio=(5, 15)`；文本嵌入位于 `llm.llm.model.model.embed_tokens`。上游没有任意条件张量参数，因此适配层在**目标文本 Token 嵌入**上加入 `tanh(LayerNorm(condition))` 的零初始化标量门控残差，而不伪造上游参数。
+
+`build_lm_input` 保持官方非流式顺序 `[sos, prompt_text_emb + target_text_emb, task_id, prompt_speech_emb]`，只改变目标文本区间；零门控下与原嵌入完全一致。`dry_run` 调用传入对象的实际 `inference_wrapper(lm_input, sampling, min_len, max_len, uuid)` 并限制 Token 预算。上游推理为 batch 1，多个样本必须顺序调用，不能把测试扩成虚构的上游批处理能力。
+
+```python
+from training.xim_cosyvoice2_bridge import CosyVoice2ConditionBridge
+
+bridge = CosyVoice2ConditionBridge(896)
+lm_input = bridge.build_lm_input(
+    llm, text=text, prompt_text=prompt_text,
+    prompt_speech_token=prompt_speech_token,
+    condition=output.condition, condition_mask=condition_mask,
+)
+# 真实权重环境需另行准备；这里不随仓库提供 llm 或权重。
+```
+
+运行 `npm run test:cosyvoice2-bridge`。当前 9／9 项通过，覆盖官方常量、嵌入属性链、零门控恒等、非零条件区间、序列长度、两个 batch-1 样本顺序 dry-run、UUID 与 Token 预算、错误输入、梯度，以及真实 XimVoiceCond-v1 输出到接口测试替身的连接。
+
+**当前只有模型结构、适配代码和接口测试替身 dry-run，尚未进行语音训练，也未加载官方 CosyVoice 2 权重。** 这些测试不证明真实语音 Token 质量、波形、首音、RTF、自然度、CER、音色一致性、取消成本或全双工效果。

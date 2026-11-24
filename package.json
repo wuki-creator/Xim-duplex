@@ -8,6 +8,7 @@
     "dev": "node server.mjs",
     "test": "node --test --experimental-test-isolation=none tests/*.test.mjs",
     "test:voice-cond": "python tests/xim-voice-cond-check.py",
+    "test:cosyvoice2-bridge": "python tests/xim-cosyvoice2-bridge-check.py",
     "evolve": "node evolution/evolve.mjs"
   },
   "engines": {

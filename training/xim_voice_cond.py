@@ -18,7 +18,7 @@ from torch.nn import functional as F
 @dataclass(frozen=True)
 class XimVoiceCondConfig:
     d_xim: int = 4096
-    d_cv2: int = 1024
+    d_cv2: int = 896
     d_model: int = 512
     num_layers: int = 4
     num_heads: int = 8

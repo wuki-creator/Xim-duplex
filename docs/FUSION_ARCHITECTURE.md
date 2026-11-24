@@ -89,11 +89,17 @@ flowchart LR
 1. **输入投影**：把文本 Token 和 xim-chat-v1 可提供的语义表示映射到 512 维；`d_xim` 从实际语言模型配置读取，不硬编码未经核对的维度。
 2. **条件融合**：情绪、授权音色和轮次／分块状态分别形成 64、128、64 维嵌入，经条件 MLP 为每个 Transformer 块生成 FiLM 缩放与偏移。音色嵌入只使用获授权数据，不能用于未授权说话人复刻。
 3. **块因果时序编码**：4 层 Transformer 主干采用 512 维、8 个注意力头、2048 维 FFN、RoPE、Pre-LN 和 GELU，目标上下文为 256 Token。当前文本块内部允许双向注意，跨块只能读取当前与过去块，并用有界 KV 缓存增量运行，禁止读取未来回复。标准多头注意力下主干约 12.6M 参数，不含输入／输出投影和嵌入。
-4. **条件输出**：残差 MLP 按 `512→1024→d_CV2` 投影，`d_CV2` 必须在集成时从 CosyVoice 2 的真实条件接口确认。输出为带 `chunk_id`、`generation_id` 和文本范围的 `[T_chunk, d_CV2]` 条件序列；过期代次直接丢弃。
+4. **条件输出**：残差 MLP 按 `512→1024→d_CV2` 投影。已从 CosyVoice 2 官方 Qwen2LM 配置与代码核对 CosyVoice2-0.5B 的 `d_CV2=896`，并将模块默认值改为 896。输出为带 `chunk_id`、`generation_id` 和文本范围的 `[T_chunk, 896]` 条件序列；过期代次直接丢弃。
 5. **辅助韵律监督**：独立 `512→256→3` 预测头学习时长、基频和能量，用于训练监督与消融；不假定 CosyVoice 2 原生接收这三个标量，也不把它们写成已实现的实时控制旋钮。
 6. **训练方式**：P3 冻结 CosyVoice 2，使用经授权的文本—语音对，通过 FSQ Token 交叉熵、条件对齐损失和韵律辅助损失训练 XimVoiceCond-v1；损失权重由消融确定。首音、RTF、自然度、CER、音色一致性和取消成本尚无实测值。
 
-### 3.2 接口必须显式记录
+### 3.2 CosyVoice 2 条件适配层（接口兼容 dry-run）
+
+[条件适配层](../training/xim_cosyvoice2_bridge.py)按上游固定提交 `074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc` 实现。官方 Qwen2LM 为 24 层、896 维，`speech_token_size=6561`、`mix_ratio=(5,15)`；文本嵌入路径为 `llm.llm.model.model.embed_tokens`。上游没有任意条件张量入参，适配层因此只在目标文本嵌入加入 `gate · tanh(LayerNorm(condition))`，其中标量 `gate` 零初始化。未训练时该路径恒等，训练后才通过非零门控引入条件。
+
+官方非流式序列仍为 `[sos, prompt_text_emb + target_text_emb, task_id, prompt_speech_emb]`；提示文本、任务标记、提示语音和总长度保持不变。[9 项接口兼容测试](../tests/xim-cosyvoice2-bridge-check.py)已验证零门控、条件作用区间、张量形状、梯度、Token 预算、UUID、异常输入和两个 batch-1 样本的顺序 dry-run。测试替身复刻的是属性链与 `inference_wrapper` 签名，**不是官方权重、真实语音 Token 或波形验证**；CosyVoice 2 的实际部署与融合链路仍为 NOT_INTEGRATED／NOT_TESTED。
+
+### 3.3 接口必须显式记录
 
 - `audio.frame`：会话 ID、帧 ID、采样时钟、音频表示和输入代次。
 - `transcript.revision`：稳定前缀、临时文本、最终文本、置信度和来源；临时文本不能直接提交开放回答。

@@ -88,9 +88,11 @@ flowchart TD
 
 ### 3.2 目标语音合成
 
-LiveBridge 目标链路先由 **XimVoiceCond-v1（语音条件对齐模型）** 把回复语义、文本、允许的情绪标签和经授权音色 ID 映射为合成条件，再交给 **CosyVoice 2**。XimVoiceCond-v1 的目标结构为输入投影、情绪／音色／状态嵌入、FiLM 条件调制、4 层块因果 Transformer（512 维、8 头、FFN 2048、RoPE、Pre-LN）和 `512→1024→d_CV2` 输出 MLP；当前块内部双向注意，跨块只读当前与过去块。它输出逐块条件序列，不直接生成音频。完整结构和接口见[融合模型设计](FUSION_ARCHITECTURE.md)。
+LiveBridge 目标链路先由 **XimVoiceCond-v1（语音条件对齐模型）** 把回复语义、文本、允许的情绪标签和经授权音色 ID 映射为合成条件，再交给 **CosyVoice 2**。XimVoiceCond-v1 的目标结构为输入投影、情绪／音色／状态嵌入、FiLM 条件调制、4 层块因果 Transformer（512 维、8 头、FFN 2048、RoPE、Pre-LN）和 `512→1024→896` 输出 MLP；当前块内部双向注意，跨块只读当前与过去块。它输出逐块条件序列，不直接生成音频。完整结构和接口见[融合模型设计](FUSION_ARCHITECTURE.md)。
 
-CosyVoice 2 的文本—语音语言模型自回归生成 FSQ 语音 Token，随后通过 chunk-aware causal Flow Matching 与声码器输出分块波形。XimVoiceCond-v1 尚未训练，CosyVoice 2 尚未部署或完成 Xim 集成测试。
+CosyVoice 2 的文本—语音语言模型自回归生成 FSQ 语音 Token，随后通过 chunk-aware causal Flow Matching 与声码器输出分块波形。已核对的 CosyVoice2-0.5B Qwen2LM 接口为 896 维文本／语音嵌入、6561 个语音 Token、`mix_ratio=(5,15)`。[条件适配层](../training/xim_cosyvoice2_bridge.py)只对目标文本 Token 嵌入加入零初始化门控残差，保持官方 `[sos, prompt_text + target_text, task_id, prompt_speech]` 顺序；[9 项接口兼容测试](../tests/xim-cosyvoice2-bridge-check.py)通过，包括两个 batch-1 样本的顺序 dry-run。
+
+XimVoiceCond-v1 尚未训练；本轮 dry-run 使用接口测试替身，**未加载官方 CosyVoice 2 权重，未生成或验证真实语音 Token 和波形**。CosyVoice 2 尚未完成 Xim 部署、首音、RTF、自然度、CER、音色一致性或全双工集成测试。
 
 目标播放链路按音频块取消，并以实际播放采样数回写会话状态；不能用 UI 动画时间代替真实播放边界。会议页与工作台页的结果提示使用浏览器 `speechSynthesis`，与主对话的神经语音是不同输出路径，不能混写为同一个流式语音模型。
 
