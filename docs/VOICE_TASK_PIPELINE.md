@@ -6,42 +6,50 @@
 
 ## 1. 当前实现总图
 
+蓝色为神经网络模型，灰色为规则、工程控制或数值求解器。
+
 ```mermaid
 flowchart TD
     U[用户讲话] --> MIC[浏览器麦克风]
     MIC --> CAP[AudioWorklet<br/>单声道 PCM16 · 16 kHz · 50 ms 包]
     CAP --> WS[鉴权 WebSocket<br/>朗读时保持收音]
-    WS --> VAD[能量 VAD<br/>160 ms 启动 · 700 ms 静音结束]
-    VAD --> TURN[Smart Turn v3.2<br/>句尾完成度预测]
-    VAD --> ASR[回环接口 + SSH<br/>Whisper Small 整句识别]
-    TURN --> GATE[两阶段话轮门控<br/>hold / resume / cancel]
-    ASR --> GATE
+    WS --> VAD[规则：能量 VAD<br/>160 ms 启动 · 700 ms 静音结束]
+    VAD -->|原始波形| TURN[Smart Turn v3.2<br/>Whisper Tiny Encoder<br/>浅层线性分类头 · 8M]
+    VAD -->|音频语句| ASR[Whisper Small<br/>Encoder–Decoder Transformer<br/>整句识别 · 回环接口 + SSH]
+    TURN -->|话轮完成概率| GATE[规则：两阶段话轮门控<br/>hold / resume / cancel]
+    ASR -->|最终文字| GATE
     TEXT[文字输入] --> ROUTER
-    GATE -->|最终转写| ROUTER{明确任务路由器<br/>voice-task-router.mjs}
+    GATE --> ROUTER{规则：明确任务路由器<br/>voice-task-router.mjs}
 
-    ROUTER -->|普通对话| CHAT[本地 xim-chat-v1<br/>Qwen3-8B + SFT LoRA]
+    ROUTER -->|普通对话| CHAT[xim-chat-v1<br/>Qwen3-8B Decoder-only Transformer<br/>36 层 · LoRA rank 16 · SFT 136 步]
     CHAT --> SEG[情绪段落 JSON<br/>最多 6 段 · 合计不超过 1600 字]
-    SEG --> TTS[当前 Demo：本地 MOSS Nano<br/>短段合成与预取]
-    TTS --> PLAY[可停播队列<br/>设备朗读回退]
+    SEG --> TTS[MOSS-TTS-Nano-100M<br/>纯自回归 Audio Tokenizer + LLM]
+    TTS --> CODEC[MOSS-Audio-Tokenizer-Nano<br/>Cat：因果 Transformer 块 + RVQ<br/>音频 Token 解码]
+    CODEC --> PLAY[可停播队列<br/>设备朗读回退]
     PLAY --> ACK[播放边界确认]
     ACK --> STATE[对话事件树与有限状态]
 
     ROUTER -->|创建或组织会议| ROOM[MeetingService<br/>本机内存会议]
-    ROOM --> COUNT[人数与主题确定性解析<br/>1–8 位虚拟参会者]
-    ROOM --> MROUTER[本地模型会议意图 JSON<br/>organize / assign / revise / ask / discuss]
-    MROUTER --> PLAN[本地模型生成方案与问题]
-    PLAN --> APPROVE{用户明确确认版本}
+    ROOM --> COUNT[规则：人数与主题解析<br/>1–8 位虚拟参会者]
+    ROOM --> MROUTER[同一个 xim-chat-v1<br/>会议意图提示与 JSON 路由]
+    MROUTER --> PLAN[同一个 xim-chat-v1<br/>另一次调用生成方案 / 讨论]
+    PLAN --> APPROVE{规则：用户明确确认版本}
     APPROVE --> RESULT[文字交付物或获准轨迹计算<br/>最多 2 项独立任务并行]
 
     ROUTER -->|明确场景动作| TASK[主对话返回受约束任务卡<br/>BroadcastChannel + URL 回退]
     TASK --> WORK[物理工作台<br/>读取当前场景和选中物体]
-    WORK --> WMODEL[simpleWorkbenchAction<br/>或本地模型动作 JSON]
-    WMODEL --> VALIDATE[动作白名单与场景校验]
-    VALIDATE --> SCENE[Three.js 场景 / Cannon ES 刚体模拟]
-    VALIDATE --> SOLVER[固定求解器<br/>本机 Python 或 SSH 服务器]
+    WORK --> WMODEL[规则解析或同一个 xim-chat-v1<br/>输出场景动作 JSON]
+    WMODEL --> VALIDATE[规则：动作白名单与场景校验]
+    VALIDATE --> SCENE[Three.js 场景 / Cannon ES 刚体模拟<br/>非 AI 模型]
+    VALIDATE --> SOLVER[固定数值求解器<br/>本机 Python 或 SSH 服务器]
     SOLVER --> SCENE
 
     ROUTER -->|否定、能力提问、普通谈论| CHAT
+
+    classDef model fill:#e4edff,stroke:#5274b9,color:#17233c;
+    classDef rule fill:#eef0f2,stroke:#89919b,color:#252a30;
+    class TURN,ASR,CHAT,TTS,CODEC,MROUTER,PLAN model;
+    class VAD,GATE,ROUTER,ROOM,COUNT,APPROVE,VALIDATE,SCENE,SOLVER rule;
 ```
 
 关键边界：
@@ -57,8 +65,8 @@ flowchart TD
 |---|---|---|---|
 | 采集 | AudioWorklet；单声道 PCM16；16 kHz；50 ms 包 | 连续音频帧 | 开放扬声器下的可靠 AEC |
 | 活动检测 | 能量 VAD；160 ms 启动；700 ms 静音结束 | 语句边界 | 复杂噪声和多人重叠语音的稳健切分 |
-| 句尾预测 | Smart Turn v3.2 | 是否可能说完 | 所有口音、背景对话与韵律条件下的通用判断 |
-| 识别 | Whisper Small；固定 revision `536b0662742c02347bc0e980a01041f333bce120`；整句识别 | 最终文字 | 流式字词时间戳、原生语义理解 |
+| 句尾预测 | Smart Turn v3.2：Whisper Tiny 编码器＋浅层线性分类头，约 8M 参数 | 是否可能说完 | 所有口音、背景对话与韵律条件下的通用判断 |
+| 识别 | Whisper Small：音频编码器—文本解码器 Transformer；固定 revision `536b0662742c02347bc0e980a01041f333bce120`；整句识别 | 最终文字 | 流式字词时间戳、原生语义理解 |
 | 接话控制 | `hold → resume／cancel`；附和可续播，纠正、让出或新输入取消旧答 | 播放控制与新一轮输入 | 端到端神经双工策略 |
 
 已测组件值不能拼成端到端延迟：Whisper 固定音频完整转写 P50 894.005 ms（n=5），Smart Turn 服务端处理 P50 32.630 ms（n=10）。这些是不同模块的小样本测量，不包含真人可听首音、网络总等待、AEC 或重叠语音成功率。
@@ -67,8 +75,9 @@ flowchart TD
 
 ### 3.1 当前对话模型
 
-- 服务模型名：`xim-chat-v1`；基座为 Qwen3-8B。
-- 当前线上选择 **SFT LoRA 检查点，训练 136 步**。另有 GRPO 120 步试验，但奖励组无方差，未证明额外收益，不作为当前效果声明。
+- 服务模型名：`xim-chat-v1`；基座为 Qwen3-8B，属于**解码器式自回归 Transformer**，实际基座为 36 层。
+- 当前线上选择 **冻结基座＋LoRA rank 16 的 SFT 检查点，训练 136 步**。另有 GRPO 120 步试验，但奖励组无方差，未证明额外收益，不作为当前效果声明。
+- 普通聊天、会议规划／讨论和复杂场景指令使用同一基座与 SFT 适配器，通过不同系统提示和输出契约调用，不是三个独立微调模型。
 - 主聊天请求：`temperature = 0.65`、`max_tokens = 320`、非流式。
 - 输出契约：`segments[{text, emotion}]`；情绪仅允许 `joy／warm／calm／curious／support／celebrate`。
 - 最多保留 6 段，合计不超过 1600 字；结构损坏、空输出、截断或过滤输出不展示为有效回复。
@@ -76,9 +85,9 @@ flowchart TD
 
 ### 3.2 当前语音合成
 
-主对话当前 Demo 使用本地 MOSS Nano 短段合成、下一段预取和设备朗读回退。它是**现行级联基线**，不是 LiveBridge 新链路组件。短段播放可取消，但已经开始的神经合成不等于可立即中止；浏览器播放边界只是已播放位置的工程估计，不是音素级听觉证明。
+主对话当前 Demo 使用 **MOSS-TTS-Nano-100M**：上游结构为纯自回归 **Audio Tokenizer＋LLM**，负责从文字和参考条件逐步生成音频 Token。随后由 **MOSS-Audio-Tokenizer-Nano** 解码；其 Cat（Causal Audio Tokenizer with Transformer）结构使用因果 Transformer 块与 RVQ，而不是 CNN 音频编解码器。当前应用在这条外部模型之外再做短段排队、下一段预取和设备朗读回退。
 
-会议页与工作台页的结果提示使用浏览器 `speechSynthesis`。它们与主对话的神经 TTS 是不同输出路径，不能混写为同一个流式语音模型。
+它是**现行级联基线**，不是 LiveBridge 新链路组件。短段播放可取消，但已经开始的神经合成不等于可立即中止；浏览器播放边界只是已播放位置的工程估计，不是音素级听觉证明。会议页与工作台页的结果提示使用浏览器 `speechSynthesis`，与主对话的神经 TTS 是不同输出路径，不能混写为同一个流式语音模型。
 
 ## 4. 语音创建会议：模型与执行细节
 

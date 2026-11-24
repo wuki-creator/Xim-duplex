@@ -18,26 +18,57 @@ v0.10.0 新增两阶段插话控制：检测到讲话先暂缓播放，附和或
 
 **创业目标架构独立于上述 Demo。** Xim LiveBridge 拟采用 Mimi 流式用户音频编码（仅编码）→ 自研流式语义—轮次适配器 → continue／backchannel／hold／yield／correct／repair 六动作决策 → 可替换流式 LLM → CosyVoice 2 分块流式合成＋固定附和音频库 → 可取消播放与播放采样反馈。除 Mimi 独立编码微基准外，目标链路、CosyVoice 2、AEC、真人重叠对话和实体玩偶均未集成或未测；不得把上游能力写成本项目效果。
 
+### 当前 Demo：模型结构与数据流
+
+蓝色节点是神经网络模型，灰色节点是规则、工程控制或数值求解器。**普通聊天、会议规划和复杂场景指令共用同一个 `xim-chat-v1`，不是三个独立语言模型。**
+
 ```mermaid
-flowchart LR
-    MIC[持续收音] --> VAD[能量 VAD]
-    VAD --> ASR[SSH → Whisper Small 整句识别]
-    VAD --> TURN[Smart Turn 话轮预测]
-    ASR --> GATE[语句合并与接话判断]
-    TURN --> GATE
-    GATE --> ROUTER{明确任务路由}
+flowchart TD
+    MIC[持续麦克风音频] --> VAD[规则：能量 VAD<br/>非神经网络]
+    VAD -->|音频语句| ASR[Whisper Small<br/>Encoder–Decoder Transformer<br/>整句语音识别 · SSH]
+    VAD -->|原始波形| TURN[Smart Turn v3.2<br/>Whisper Tiny Encoder<br/>浅层线性分类头 · 8M]
+    ASR -->|最终文字| GATE[规则：语句合并与两阶段接话控制]
+    TURN -->|话轮完成概率| GATE
     TEXT[文字输入] --> ROUTER
-    ROUTER -->|普通对话| LLM[自托管语言模型]
-    ROUTER -->|创建会议| ROOM[虚拟会议与方案版本]
-    ROOM --> CONFIRM[明确确认后执行]
-    ROUTER -->|场景动作| WORK[物理工作台]
-    WORK --> CHECK[动作白名单与坐标校验]
-    CHECK --> WORLD[Three.js / Cannon ES / 固定求解器]
-    LLM --> UI[情绪文字 / Three.js]
-    LLM --> TTS[MOSS Nano 短段合成与预取]
-    TTS -->|播放确认| GATE
-    VAD -->|插话停播| TTS
+    GATE --> ROUTER{规则：明确任务路由<br/>非模型}
+
+    ROUTER -->|普通聊天| CHATP[对话系统提示]
+    ROUTER -->|会议派活 / 讨论 / 修改| MEETP[会议路由器与方案提示]
+    ROUTER -->|复杂场景口令| SCENEP[场景动作提示]
+    ROUTER -->|简单添加口令| SIMPLE[规则解析<br/>不调用 LLM]
+
+    CHATP --> LLM[xim-chat-v1<br/>Qwen3-8B Decoder-only Transformer<br/>36 层 · LoRA rank 16 · SFT 136 步]
+    MEETP --> LLM
+    SCENEP --> LLM
+
+    LLM -->|情绪段落 JSON| UI[情绪文字 / Three.js 表情]
+    LLM -->|会议方案 / 讨论 JSON| ROOM[虚拟会议与方案版本]
+    LLM -->|场景动作 JSON| CHECK[规则：对象 ID / 动作白名单 / 坐标校验]
+    SIMPLE --> CHECK
+    ROOM --> CONFIRM[规则：用户明确确认后执行]
+    CHECK --> WORLD[Three.js + Cannon ES<br/>固定物理 / 机械臂数值求解器<br/>非 LLM · 非世界模型]
+
+    UI --> TTS[MOSS-TTS-Nano-100M<br/>纯自回归 Audio Tokenizer + LLM<br/>文本 / 音频 Token 生成]
+    TTS --> CODEC[MOSS-Audio-Tokenizer-Nano<br/>Cat：全因果 Transformer 块<br/>RVQ 音频 Token 解码]
+    CODEC --> PLAY[音频播放 / 设备朗读回退]
+    PLAY -->|播放边界确认| GATE
+    VAD -->|检测到新讲话| GATE
+
+    classDef model fill:#e4edff,stroke:#5274b9,color:#17233c;
+    classDef rule fill:#eef0f2,stroke:#89919b,color:#252a30;
+    class ASR,TURN,LLM,TTS,CODEC model;
+    class VAD,GATE,ROUTER,SIMPLE,ROOM,CONFIRM,CHECK,WORLD rule;
 ```
+
+| 图中模型 | 结构 | 在 Xim 中的职责 |
+| --- | --- | --- |
+| [Whisper Small](https://huggingface.co/Systran/faster-whisper-small) | 音频编码器—文本解码器 Transformer | 把整句语音转成文字；不负责对话或任务决策 |
+| [Smart Turn v3.2](https://huggingface.co/pipecat-ai/smart-turn-v3) | Whisper Tiny 编码器＋浅层线性分类头，约 8M 参数 | 直接从波形预测话轮是否完成；不输出转写 |
+| [xim-chat-v1](docs/XIM_CHAT_V1_MODEL_CARD.md) | Qwen3-8B 解码器式 Transformer，36 层，冻结基座＋LoRA rank 16，当前使用 SFT 136 步检查点 | 生成聊天情绪段落、会议方案／讨论和结构化场景动作提案 |
+| [MOSS-TTS-Nano-100M](https://github.com/OpenMOSS/MOSS-TTS-Nano) | 纯自回归 Audio Tokenizer＋LLM | 当前 Demo 把回复文字生成音频 Token；不是 LiveBridge 目标组件 |
+| MOSS-Audio-Tokenizer-Nano | Cat（Causal Audio Tokenizer with Transformer），由因果 Transformer 块和 RVQ 组成 | 当前 Demo 将音频 Token 解码为声音 |
+
+能量 VAD、任务路由、会议确认、对象／坐标校验和播放状态机都不是神经网络；Three.js 是渲染引擎，Cannon ES 是刚体物理引擎，机械臂轨迹来自固定数值求解器。当前没有训练物理世界模型，也没有用 LLM 直接计算物理轨迹。
 
 ## 当前能力
 
