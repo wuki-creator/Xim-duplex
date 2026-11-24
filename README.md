@@ -21,9 +21,26 @@ npm start
 
 ## 当前可运行的语音链路
 
-1. 浏览器发送 16 kHz 单声道 PCM。能量 VAD 保留最近 800 ms 预录音频，在起音时按采样顺序送入识别。ASR 转写整句，可选的 Smart Turn 并行判断话尾。
-2. 两阶段插话控制根据最终转写决定续播或取消。普通对话、会议方案和复杂场景口令共用一个文本模型；会议执行需要确认，场景动作接受对象、坐标和动作白名单校验。[交互流程](docs/MODEL_FLOW.md) · [任务示例](docs/WORKBENCH_AND_MEETING.md)
-3. 服务返回带情绪标签的文本段，由本地神经语音或设备朗读播放。交互记录可以导出事件及相对时间。服务端在内存中暂存最近 100 条回答。自愿授权并评价后，输入、回答和评价写入本机 `data/feedback.jsonl`。[模型与任务调用细节](docs/VOICE_TASK_PIPELINE.md)
+```mermaid
+flowchart TD
+    mic["麦克风 · 16 kHz PCM"] --> vad["能量 VAD · 800 ms 预录"]
+    vad --> asr["ASR 整句转写"]
+    vad -. 可选 .-> turn["Smart Turn 判断话尾"]
+    asr --> gate["提交本轮转写"]
+    turn -.-> gate
+    gate -->|暂缓中，附和或未听清| resume["继续原回复"]
+    gate -->|有效新输入| route{"按意图路由"}
+    route -->|普通对话| chat["文本模型生成回复"]
+    route -->|会议口令| meeting["创建虚拟会议"]
+    route -->|场景口令| scene["转交物理工作台"]
+    chat --> play["朗读回复或任务提示"]
+    meeting --> play
+    scene --> play
+```
+
+播放过程中，VAD 检测到起音就暂缓朗读。若转写为「不对，我说的是明天」，系统取消旧回复，再处理纠正后的输入。会议方案须经用户确认才能执行，工作台会校验对象、坐标和允许的动作。[交互流程](docs/MODEL_FLOW.md) · [任务示例](docs/WORKBENCH_AND_MEETING.md)
+
+本地神经语音或设备朗读负责播放。交互记录可导出事件及相对时间。服务端在内存中暂存最近 100 条回答，自愿授权并评价后才将输入、回答和评价写入本机 `data/feedback.jsonl`。[模型与任务调用细节](docs/VOICE_TASK_PIPELINE.md)
 
 ## 模型进展与证据
 
@@ -32,7 +49,21 @@ npm start
 | xim-chat-v1 | Qwen3-8B 的 LoRA SFT 训练 136 步后，100 条合成任务留出样本的正确率从 94% 升至 100%。采用 SFT 检查点。后续 120 步 GRPO 未显示额外收益。[模型卡](docs/XIM_CHAT_V1_MODEL_CARD.md) |
 | XimVoiceCond-v1 | 已实现四层块因果 Transformer，输出 896 维语音条件。各层的查询和键复用同一组 RoPE 系数。合成张量测试覆盖增量缓存、因果性和梯度；权重尚未训练。[实现](training/xim_voice_cond.py) |
 | CosyVoice 2 接口 | 零初始化门控残差只作用于目标文本嵌入。接口替身已验证调用顺序和生成预算；官方权重与波形合成尚未接入。[适配层](training/xim_cosyvoice2_bridge.py) |
-| LiveBridge 目标链路 | 计划将 Mimi 音频表示、时序适配器、xim-chat-v1 和语音条件模型联合训练。现有组件测量不能给出真人重叠讲话、开放扬声器 AEC 或端到端首音结果。[融合架构与训练路线](docs/FUSION_ARCHITECTURE.md) |
+
+### LiveBridge 目标模型流程
+
+```mermaid
+flowchart TD
+    mimi["Mimi 编码用户音频"] --> adapt["音频投影与因果时序适配器"]
+    adapt --> xim["xim-chat-v1 共享语义表示"]
+    state["文字、会话与播放状态"] --> xim
+    xim -->|回复语义| cond["XimVoiceCond-v1<br/>896 维语音条件"]
+    cond --> bridge["门控残差注入目标文本嵌入"]
+    bridge --> cosy["CosyVoice 2 分块合成语音"]
+    xim -->|轮次动作与任务提案| control["播放控制与任务校验"]
+```
+
+融合权重尚待训练，CosyVoice 2 官方权重尚待接入。真人重叠讲话、开放扬声器回声消除和端到端首音仍待实测。[融合架构与训练路线](docs/FUSION_ARCHITECTURE.md)
 
 固定样本的 ASR、Smart Turn、语言模型、语音合成和 Mimi 编码耗时，以及每项的机器、样本数和统计口径，见[组件实测记录](docs/evaluations/2026-11-23/README.md)。
 
