@@ -1,8 +1,8 @@
-# Xim LiveBridge：无 MOSS 跨模态融合架构
+# Xim LiveBridge：跨模态融合架构
 
 更新时间：2026-11-24
 
-> **状态：目标设计，`NOT_TRAINED / NOT_INTEGRATED / NOT_TESTED`。** 本文描述拟开发的融合模型，不是当前可运行 Demo 的部署记录。当前没有融合检查点、跨模态训练数据、CosyVoice 2 部署结果或真人重叠对话成绩。现有 MOSS Nano 只保留在历史级联基线中，不进入本架构。
+> **状态：目标设计，`NOT_TRAINED / NOT_INTEGRATED / NOT_TESTED`。** 本文描述拟开发的融合模型，不是当前可运行 Demo 的部署记录。当前没有融合检查点、跨模态训练数据、CosyVoice 2 部署结果或真人重叠对话成绩。现有级联 Demo 只作为工程对照，不进入本架构。
 
 ## 1. 融合的定义
 

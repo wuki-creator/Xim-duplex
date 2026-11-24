@@ -2,11 +2,11 @@
 
 更新时间：2026-11-24
 
-本文把**当前 GitHub 可运行链路**与 **Xim LiveBridge 创业目标链路**分开描述。语音既能进入普通陪伴对话，也能在主对话中发起虚拟会议或向物理工作台提交受约束的场景指令。这里的“物理场景”是浏览器中的三维刚体与虚拟机械臂，不是真实机器人。
+本文把**当前 GitHub 可运行组件**与 **Xim LiveBridge 创业目标链路**分开描述。语音既能进入普通陪伴对话，也能在主对话中发起虚拟会议或向物理工作台提交受约束的场景指令。这里的“物理场景”是浏览器中的三维刚体与虚拟机械臂，不是真实机器人。
 
-## 1. 当前实现总图
+## 1. 全链路模型总图
 
-蓝色为神经网络模型，灰色为规则、工程控制或数值求解器。
+蓝色为已有神经网络模型，紫色为待训练的自研模块，灰色为规则、工程控制或数值求解器。图中 CosyVoice 2 是目标合成组件，尚未部署或完成 Xim 集成测试。
 
 ```mermaid
 flowchart TD
@@ -23,9 +23,10 @@ flowchart TD
 
     ROUTER -->|普通对话| CHAT[xim-chat-v1<br/>Qwen3-8B Decoder-only Transformer<br/>36 层 · LoRA rank 16 · SFT 136 步]
     CHAT --> SEG[情绪段落 JSON<br/>最多 6 段 · 合计不超过 1600 字]
-    SEG --> TTS[MOSS-TTS-Nano-100M<br/>纯自回归 Audio Tokenizer + LLM]
-    TTS --> CODEC[MOSS-Audio-Tokenizer-Nano<br/>Cat：因果 Transformer 块 + RVQ<br/>音频 Token 解码]
-    CODEC --> PLAY[可停播队列<br/>设备朗读回退]
+    SEG --> VCOND[自研语音条件投影<br/>文本 / 情绪 / 授权音色条件<br/>NOT_TRAINED]
+    VCOND --> TTS[CosyVoice 2 文本—语音 LM<br/>自回归生成 FSQ 语音 Token<br/>NOT_INTEGRATED]
+    TTS --> FLOW[CosyVoice 2 波形解码链路<br/>chunk-aware causal Flow Matching + 声码器<br/>NOT_TESTED]
+    FLOW --> PLAY[可取消音频块队列<br/>设备朗读回退]
     PLAY --> ACK[播放边界确认]
     ACK --> STATE[对话事件树与有限状态]
 
@@ -47,8 +48,10 @@ flowchart TD
     ROUTER -->|否定、能力提问、普通谈论| CHAT
 
     classDef model fill:#e4edff,stroke:#5274b9,color:#17233c;
+    classDef train fill:#eee5ff,stroke:#8260ac,color:#281b39;
     classDef rule fill:#eef0f2,stroke:#89919b,color:#252a30;
-    class TURN,ASR,CHAT,TTS,CODEC,MROUTER,PLAN model;
+    class TURN,ASR,CHAT,TTS,FLOW,MROUTER,PLAN model;
+    class VCOND train;
     class VAD,GATE,ROUTER,ROOM,COUNT,APPROVE,VALIDATE,SCENE,SOLVER rule;
 ```
 
@@ -83,11 +86,11 @@ flowchart TD
 - 最多保留 6 段，合计不超过 1600 字；结构损坏、空输出、截断或过滤输出不展示为有效回复。
 - 主聊天模型仍不能自行授予工具权限。`localChat` 会丢弃模型给出的任务和工具字段，明确任务由服务端确定性路由进入受限模块。
 
-### 3.2 当前语音合成
+### 3.2 目标语音合成
 
-主对话当前 Demo 使用 **MOSS-TTS-Nano-100M**：上游结构为纯自回归 **Audio Tokenizer＋LLM**，负责从文字和参考条件逐步生成音频 Token。随后由 **MOSS-Audio-Tokenizer-Nano** 解码；其 Cat（Causal Audio Tokenizer with Transformer）结构使用因果 Transformer 块与 RVQ，而不是 CNN 音频编解码器。当前应用在这条外部模型之外再做短段排队、下一段预取和设备朗读回退。
+LiveBridge 目标链路先由**自研语音条件投影**把回复文本、允许的情绪标签和经授权音色 ID 映射为合成条件，再交给 **CosyVoice 2**。其文本—语音语言模型自回归生成 FSQ 语音 Token，随后通过 chunk-aware causal Flow Matching 与声码器输出分块波形。语音条件投影尚未训练，CosyVoice 2 尚未部署或完成 Xim 集成测试。
 
-它是**现行级联基线**，不是 LiveBridge 新链路组件。短段播放可取消，但已经开始的神经合成不等于可立即中止；浏览器播放边界只是已播放位置的工程估计，不是音素级听觉证明。会议页与工作台页的结果提示使用浏览器 `speechSynthesis`，与主对话的神经 TTS 是不同输出路径，不能混写为同一个流式语音模型。
+目标播放链路按音频块取消，并以实际播放采样数回写会话状态；不能用 UI 动画时间代替真实播放边界。会议页与工作台页的结果提示使用浏览器 `speechSynthesis`，与主对话的神经语音是不同输出路径，不能混写为同一个流式语音模型。
 
 ## 4. 语音创建会议：模型与执行细节
 
@@ -157,7 +160,7 @@ flowchart TD
 
 当前没有实体机械臂驱动、安全 PLC、真实碰撞避免、连杆完整碰撞检查或自动绕障，不能用于现实机器人安全控制。
 
-## 6. LiveBridge 无 MOSS 融合目标（未训练、未集成）
+## 6. LiveBridge 跨模态融合目标（未训练、未集成）
 
 目标架构用 Mimi、xim-chat-v1 与 CosyVoice 2 加自研跨模态适配层，形成共享语义表示；不是权重相加，也不把三个服务简单串联等同于融合模型。完整结构、张量契约与训练阶段见 **[融合模型设计](FUSION_ARCHITECTURE.md)**。
 

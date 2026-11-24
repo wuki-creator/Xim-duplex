@@ -6,17 +6,17 @@
 
 [观看 ChatCut 演示成片](public/media/xim-demo.mp4) · [验证记录](docs/VALIDATION.md)
 
-**[无 MOSS 跨模态融合模型 →](docs/FUSION_ARCHITECTURE.md)** · [全链路模型细节](docs/VOICE_TASK_PIPELINE.md) · [当前模型流程与打断续接](docs/MODEL_FLOW.md) · [原生全双工改造方案](docs/DUPLEX_ARCHITECTURE.md)
+**[跨模态融合模型 →](docs/FUSION_ARCHITECTURE.md)** · [全链路模型细节](docs/VOICE_TASK_PIPELINE.md) · [当前模型流程与打断续接](docs/MODEL_FLOW.md) · [原生全双工改造方案](docs/DUPLEX_ARCHITECTURE.md)
 
 v0.10.0 新增两阶段插话控制：检测到讲话先暂缓播放，附和或未识别片段可续播，纠正、明确让出与新输入才取消旧回答。新增不含录音和原文的交互验证记录导出；[架构与流程](docs/MODEL_FLOW.md)说明已运行组件和待训练网络的区别。
 
 多任务模型 **[xim-chat-v1](docs/XIM_CHAT_V1_MODEL_CARD.md)** 已完成基于 Qwen3-8B 的 SFT 136 步与 GRPO 120 步。当前采用 SFT 检查点，任务模板留出正确率 94% → 100%；GRPO 奖励组无方差，未证明额外收益。[训练记录与运行方法](training/README.md)保留真实指标和限制。
 
-**自托管产品路线。** 不调用 MOSS 或 DeepSeek 云 API。主对话、[会议空间与物理工作台](docs/WORKBENCH_AND_MEETING.md)共用 Xim 的收音链路；当前这台机器使用服务器 Whisper + 自托管语言模型 + MOSS Nano 本地语音，语音服务不可用时回退设备朗读。MOSS 只属当前 Demo／历史基线，不是创业目标组件。
+**自托管产品路线。** 不调用第三方云 API。主对话、[会议空间与物理工作台](docs/WORKBENCH_AND_MEETING.md)共用 Xim 的收音链路；当前这台机器使用服务器 Whisper＋自托管语言模型＋本地神经语音，语音服务不可用时回退设备朗读。创业目标链路采用 Mimi、xim-chat-v1、自研适配模块与 CosyVoice 2。
 
-2026-11-23 组件实测：3.5359 秒固定音频上，Whisper-small 完整转写 P50 894.005 ms；Smart Turn 服务端 P50 32.630 ms；Qwen3-8B＋SFT 非流式完整回复 P50 483.235 ms；CPU MOSS Nano 完整 WAV 平均 RTF 0.8195。另在本机 Windows CPU 完成 Mimi 独立编码微基准：3.84 秒合成音频，48×80 ms 编码步，n=10，P50 3793.193 ms、P95 4765.936 ms；这不是服务器、实时、语义、音质或集成结果。样本、逐次结果及限制见[组件实测](docs/evaluations/2026-11-23/README.md)，不能解释为真人端到端或重叠语音指标。[附件改造方案审阅](docs/ARCHITECTURE_REVIEW.md)给出采纳、修改与拒绝项。
+2026-11-23 组件实测：3.5359 秒固定音频上，Whisper-small 完整转写 P50 894.005 ms；Smart Turn 服务端 P50 32.630 ms；Qwen3-8B＋SFT 非流式完整回复 P50 483.235 ms；CPU 本地 Nano 语音完整 WAV 平均 RTF 0.8195。另在本机 Windows CPU 完成 Mimi 独立编码微基准：3.84 秒合成音频，48×80 ms 编码步，n=10，P50 3793.193 ms、P95 4765.936 ms；这不是服务器、实时、语义、音质或集成结果。样本、逐次结果及限制见[组件实测](docs/evaluations/2026-11-23/README.md)，不能解释为真人端到端或重叠语音指标。[附件改造方案审阅](docs/ARCHITECTURE_REVIEW.md)给出采纳、修改与拒绝项。
 
-## 创业目标：无 MOSS 的跨模态融合模型
+## 创业目标：跨模态融合模型
 
 Xim LiveBridge 采用 **Mimi 用户音频编码器＋自研跨模态适配层＋xim-chat-v1＋CosyVoice 2**。融合是共享语义表示与联合训练，不是把权重直接相加。Mimi 只编码用户音频；自研音频投影与因果时序适配器将语音、文字和会话状态对齐；`xim-chat-v1` 统一生成回复、轮次行为与工具提案；语音条件投影再驱动 CosyVoice 2 合成声音。**融合权重、CosyVoice 2 部署及完整双工链路目前均为 NOT_TRAINED／NOT_INTEGRATED／NOT_TESTED。** 训练步骤与接口见[融合模型设计](docs/FUSION_ARCHITECTURE.md)。
 
@@ -72,9 +72,9 @@ flowchart TD
 
 **当前工程验证（2026-11-24）：65／65 Node 回归通过**，包含语音创建会议和虚拟场景路由合同；这些测试不证明融合模型质量、真人体验或全双工性能。证据边界见[验证记录](docs/VALIDATION.md)，六项未测门槛定义见[融合模型设计](docs/FUSION_ARCHITECTURE.md)；本地 TRL 证据表不随仓库分发。
 
-## 当前 Demo（MOSS 历史基线）：模型结构与数据流
+## 全链路模型：结构、职责与数据流
 
-蓝色节点是神经网络模型，灰色节点是规则、工程控制或数值求解器。**普通聊天、会议规划和复杂场景指令共用同一个 `xim-chat-v1`，不是三个独立语言模型。**
+蓝色节点是神经网络模型，灰色节点是规则、工程控制或数值求解器。**普通聊天、会议规划和复杂场景指令共用同一个 `xim-chat-v1`，不是三个独立语言模型。** 下图把现有语音理解与语言模型、目标语音合成链路放在同一数据流中；CosyVoice 2 和语音条件投影仍未接入，不能据此宣称融合模型已经运行。
 
 ```mermaid
 flowchart TD
@@ -102,15 +102,18 @@ flowchart TD
     ROOM --> CONFIRM[规则：用户明确确认后执行]
     CHECK --> WORLD[Three.js + Cannon ES<br/>固定物理 / 机械臂数值求解器<br/>非 LLM · 非世界模型]
 
-    UI --> TTS[MOSS-TTS-Nano-100M<br/>纯自回归 Audio Tokenizer + LLM<br/>文本 / 音频 Token 生成]
-    TTS --> CODEC[MOSS-Audio-Tokenizer-Nano<br/>Cat：全因果 Transformer 块<br/>RVQ 音频 Token 解码]
-    CODEC --> PLAY[音频播放 / 设备朗读回退]
-    PLAY -->|播放边界确认| GATE
+    UI --> VCOND[自研语音条件投影<br/>文本 / 情绪 / 授权音色条件]
+    VCOND --> TTS[CosyVoice 2 文本—语音 LM<br/>自回归生成 FSQ 语音 Token]
+    TTS --> FLOW[CosyVoice 2 波形解码链路<br/>chunk-aware causal Flow Matching<br/>FSQ Token → 声码器 → 波形]
+    FLOW --> PLAY[可取消音频块队列 / 设备朗读回退]
+    PLAY -->|实际播放采样反馈| GATE
     VAD -->|检测到新讲话| GATE
 
     classDef model fill:#e4edff,stroke:#5274b9,color:#17233c;
+    classDef train fill:#eee5ff,stroke:#8260ac,color:#281b39;
     classDef rule fill:#eef0f2,stroke:#89919b,color:#252a30;
-    class ASR,TURN,LLM,TTS,CODEC model;
+    class ASR,TURN,LLM,TTS,FLOW model;
+    class VCOND train;
     class VAD,GATE,ROUTER,SIMPLE,ROOM,CONFIRM,CHECK,WORLD rule;
 ```
 
@@ -119,8 +122,8 @@ flowchart TD
 | [Whisper Small](https://huggingface.co/Systran/faster-whisper-small) | 音频编码器—文本解码器 Transformer | 把整句语音转成文字；不负责对话或任务决策 |
 | [Smart Turn v3.2](https://huggingface.co/pipecat-ai/smart-turn-v3) | Whisper Tiny 编码器＋浅层线性分类头，约 8M 参数 | 直接从波形预测话轮是否完成；不输出转写 |
 | [xim-chat-v1](docs/XIM_CHAT_V1_MODEL_CARD.md) | Qwen3-8B 解码器式 Transformer，36 层，冻结基座＋LoRA rank 16，当前使用 SFT 136 步检查点 | 生成聊天情绪段落、会议方案／讨论和结构化场景动作提案 |
-| [MOSS-TTS-Nano-100M](https://github.com/OpenMOSS/MOSS-TTS-Nano) | 纯自回归 Audio Tokenizer＋LLM | 当前 Demo 把回复文字生成音频 Token；不是 LiveBridge 目标组件 |
-| MOSS-Audio-Tokenizer-Nano | Cat（Causal Audio Tokenizer with Transformer），由因果 Transformer 块和 RVQ 组成 | 当前 Demo 将音频 Token 解码为声音 |
+| 自研语音条件投影 | 条件对齐与投影网络，按真实张量契约映射文本、情绪和授权音色 | 把共享语义工作区的输出转换为合成条件；尚未训练 |
+| [CosyVoice 2](https://github.com/FunAudioLLM/CosyVoice) | FSQ 语音表示＋文本—语音 LM＋chunk-aware causal Flow Matching＋声码器 | 将合成条件转为分块波形；尚未部署或完成 Xim 集成测试 |
 
 能量 VAD、任务路由、会议确认、对象／坐标校验和播放状态机都不是神经网络；Three.js 是渲染引擎，Cannon ES 是刚体物理引擎，机械臂轨迹来自固定数值求解器。当前没有训练物理世界模型，也没有用 LLM 直接计算物理轨迹。
 
