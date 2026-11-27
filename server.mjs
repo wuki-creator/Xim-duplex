@@ -2,15 +2,14 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import {setTimeout as pause} from 'node:timers/promises';
 import {fileURLToPath} from 'node:url';
 import {WebSocketServer} from 'ws';
 import {emotions} from './policy.mjs';
 import {VadSegmenter} from './voice-policy.mjs';
 import {interpretWorkbench,computeWorld,generateWorkbenchImage} from './workbench.mjs';
 import {MeetingService,MeetingError} from './meeting.mjs';
-import {localChat,localSpeech,loopbackUrl} from './local-models.mjs';
-import {predictTurn,TurnReleaseGate} from './turn-completion.mjs';
+import {localChat,localSpeech,loopbackUrl,recognizeSegment} from './local-models.mjs';
+import {TurnReleaseGate} from './turn-completion.mjs';
 import {routeVoiceTask} from './voice-task-router.mjs';
 const assets=new Set(['index.html','app.js','speech-queue.js','dialogue-state.js','duplex-policy.js','duplex-controller.js','interaction-log.js','room.css','style.css','robot3d.js','voice-client.js','capture-worklet.js','workbench.html','workbench.css','workbench.js','world.js','meeting.html','meeting.css','meeting-ui.js','vendor/cannon-es.js','vendor/three.module.js','vendor/three.core.js','media/xim-demo.mp4','media/poster.png']);
 const mediaTypes={'.html':'text/html; charset=utf-8','.css':'text/css','.js':'application/javascript','.mp4':'video/mp4','.png':'image/png'};
@@ -194,28 +193,16 @@ wss.on('connection',ws=>{
    recognizing=true;let failed=false;
    while(pendingAudio.length&&!closed){
     const {pcm,forced}=pendingAudio.shift(),controller=new AbortController();current=controller;
-    // Run acoustic turn prediction alongside ASR, not as a second LLM call.
-    const boundary=forced?Promise.resolve(null):predictTurn({url:turnUrl,pcm,signal:controller.signal});
     let timedOut=false;const timer=setTimeout(()=>{timedOut=true;controller.abort();},20000);
     try{
-      let response;
-      let result;
-      if(!result){
-        do {
-          response=await fetch(asrURL+'/transcribe',{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:pcm,signal:controller.signal});
-          if(response.status===429){await response.body?.cancel();await pause(150,undefined,{signal:controller.signal});}
-        } while(response.status===429);
-        if(!response.ok)throw Error('asr');
-        result=await response.json();
-      }
-      const turn=await boundary;
-      if(!closed)recognized.push({text:typeof result.text==='string'?result.text.slice(0,2000):'',complete:forced?true:turn?.complete,reason:['no_match','low_confidence','overlap'].includes(result.reason)?result.reason:'no_match'});
+      const segment=await recognizeSegment({asrUrl:asrURL,turnUrl,pcm,forced,signal:controller.signal});
+      if(!closed)recognized.push(segment);
     }catch{
       failed=true;gate.cancel();pendingAudio.length=0;recognized.length=0;
       if(!closed&&(!controller.signal.aborted||timedOut))output({type:'error',message:timedOut?'语音识别超时，请重试或使用文字对话。':'语音识别暂不可用，请使用文字对话。'});
       break;
     }
-    finally{clearTimeout(timer);}
+    finally{clearTimeout(timer);current=null;}
    }
    recognizing=false;
    // A short hesitation can join the next utterance; silence is bounded to avoid a stuck conversation.
